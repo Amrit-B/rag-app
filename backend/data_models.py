@@ -22,4 +22,3 @@ class RagResponse(BaseModel):
     filename: str = Field(description="filename of the retrived file without suffix")
     filepath: str = Field(description='absolute path to the retrived file')
     answer: str = Field(description='answer based in the retrived file')
-    
