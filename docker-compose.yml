@@ -1,6 +1,6 @@
 services:
   fastapi:
-    image: ambro333/rag-app:latest
+    image: docker.io/ambro333/rag-app:latest
     container_name: rag-api
     ports:
       - "8000:8000"
@@ -14,7 +14,7 @@ services:
     restart: unless-stopped
 
   streamlit:
-    image: ambro333/rag-app:latest
+    image: docker.io/ambro333/rag-app:latest
     container_name: rag-frontend
     ports:
       - "8501:8501"
