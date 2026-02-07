@@ -216,7 +216,11 @@ def show_about():
         st.markdown("[Amrit-B](https://github.com/Amrit-B)")
     
     st.markdown("---")
-    st.markdown("*Built with FastAPI, Streamlit, LanceDB, Docker, Sentence Transformers, and Google Gemini API*")
+    st.markdown("### 🛠️ Built With")
+    st.markdown("FastAPI • Streamlit • LanceDB • HF Transformer • Google Gemini API • Docker • GitHub Actions CI/CD • JWT Auth • Nginx SSL")
+    
+    st.markdown("⚠️ Note: This RAG system works with text-only documents (PDFs with extractable text). Image-based PDFs, scanned documents, or files with embedded images are not currently supported.")
+    st.markdown("---")
 
 if __name__=="__main__":
     st.set_page_config(page_title="RAG Assistant", layout="wide", initial_sidebar_state="expanded")
