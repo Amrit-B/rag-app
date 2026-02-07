@@ -1,8 +1,9 @@
 import lancedb
+from datetime import timedelta
 from pathlib import Path
 from pypdf import PdfReader
 from backend.constants import VECTOR_DATABASE_PATH, DATA_PATH
-from backend.data_models import Article
+from backend.data_models import ChunkArticle
 
 
 def extract_text_from_pdf(pdf_path: Path) -> str:
@@ -16,39 +17,69 @@ def extract_text_from_pdf(pdf_path: Path) -> str:
     return all_text
 
 
-def save_text_to_file(text: str, output_path: Path) -> None:
+def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> list[str]:
+    if not text:
+        return []
+    chunks = []
+    step = chunk_size - overlap
+    for i in range(0, len(text), step):
+        chunks.append(text[i : i + chunk_size])
+    return chunks
 
-    with open(output_path, 'w', encoding="utf-8") as file:
-        file.write(text)
 
-
-def ingest_single_document(pdf_path: Path, table) -> dict:
+def ingest_single_document(pdf_path: Path, owner_id: str, progress_callback=None) -> dict:
 
     try:
-
+        if progress_callback: progress_callback(0.1, "Extracting text...")
+        table = get_vector_db_table()
         content = extract_text_from_pdf(pdf_path)
         
 
-        txt_filename = f"{pdf_path.stem}.txt"
-        txt_path = DATA_PATH / txt_filename
-        save_text_to_file(content, txt_path)
+        txt_path = pdf_path.with_suffix('.txt')
+        txt_path.write_text(content, encoding="utf-8")
 
         doc_id = pdf_path.stem
         
 
-        table.delete(f"doc_id = '{doc_id}'")
+        table.delete(f"doc_id = '{doc_id}' AND owner_id = '{owner_id}'")
+            
         table.compact_files()
         
-
-        table.add([
-            {
-                "doc_id": doc_id,
-                "filepath": str(txt_path),
-                "filename": pdf_path.stem,
-                "content": content
-            }
-        ])
+        if progress_callback: progress_callback(0.2, "Chunking text...")
+        text_chunks = chunk_text(content)
         
+        embeddings = []
+        if text_chunks:
+            from backend.data_models import embedding_model
+            
+            total = len(text_chunks)
+            batch_size = 10
+            for i in range(0, total, batch_size):
+                if progress_callback:
+                    p = 0.2 + (0.7 * (i / total))
+                    progress_callback(p, f"Embedding chunks {i}/{total}...")
+                
+                batch = text_chunks[i : i + batch_size]
+                batch_embeddings = embedding_model.compute_source_embeddings(batch)
+                embeddings.extend(batch_embeddings)
+            
+        chunk_records = []
+        for i, chunk in enumerate(text_chunks):
+            chunk_records.append({
+                'doc_id': doc_id,
+                'chunk_id': f"{doc_id}_chunk_{i}",
+                'filepath': str(txt_path),
+                'filename': pdf_path.stem,
+                'content': chunk,
+                'owner_id': owner_id,
+                'embedding': embeddings[i]
+            })
+
+        if progress_callback: progress_callback(0.95, "Saving to database...")
+        if chunk_records:
+            table.add(chunk_records)
+        
+        if progress_callback: progress_callback(1.0, "Processing complete")
         return {
             "success": True,
             "doc_id": doc_id,
@@ -66,41 +97,48 @@ def ingest_single_document(pdf_path: Path, table) -> dict:
 
 
 def get_vector_db_table():
-
     vector_db = lancedb.connect(uri=VECTOR_DATABASE_PATH)
     
     try:
-        table = vector_db.open_table("articles")
-    except:
-        table = vector_db.create_table("articles", schema=Article, mode="overwrite")
+        table = vector_db.open_table("articles_chunks")
+    except Exception:
+        table = vector_db.create_table("articles_chunks", schema=ChunkArticle, mode="overwrite")
     
     return table
 
 
-def list_all_documents() -> list:
+def list_documents(owner_id: str) -> list:
 
     try:
         table = get_vector_db_table()
-        docs = table.to_pandas()[['doc_id', 'filename']].drop_duplicates().to_dict('records')
+        df = table.to_pandas()
+        # Filter by owner_id before returning
+        df = df[df['owner_id'] == owner_id]
+        docs = df[['doc_id', 'filename', 'owner_id']].drop_duplicates().to_dict('records')
         return docs
     except Exception as e:
         return []
 
 
-def delete_document(doc_id: str) -> dict:
+def delete_document(doc_id: str, owner_id: str) -> dict:
 
     try:
         table = get_vector_db_table()
-        table.delete(f"doc_id = '{doc_id}'")
+        
+        # Get filepaths before deletion
+        try:
+            df = table.to_pandas()
+            matches = df[(df['doc_id'] == doc_id) & (df['owner_id'] == owner_id)]
+            if not matches.empty:
+                txt_path = Path(matches.iloc[0]['filepath'])
+                txt_path.unlink(missing_ok=True)
+                txt_path.with_suffix('.pdf').unlink(missing_ok=True)
+        except Exception:
+            pass
+
+        table.delete(f"doc_id = '{doc_id}' AND owner_id = '{owner_id}'")
         table.compact_files()
         
-        txt_path = DATA_PATH / f"{doc_id}.txt"
-        if txt_path.exists():
-            txt_path.unlink()
-        
-        pdf_path = DATA_PATH / f"{doc_id}.pdf"
-        if pdf_path.exists():
-            pdf_path.unlink()
         
         return {
             "success": True,
@@ -113,24 +151,26 @@ def delete_document(doc_id: str) -> dict:
         }
 
 
-def reset_knowledge_base() -> dict:
+def reset_knowledge_base(owner_id: str) -> dict:
 
     try:
-        import shutil
-        
-        if VECTOR_DATABASE_PATH.exists():
-            shutil.rmtree(VECTOR_DATABASE_PATH)
-        
-        VECTOR_DATABASE_PATH.mkdir(parents=True, exist_ok=True)
-        
-        vector_db = lancedb.connect(uri=VECTOR_DATABASE_PATH)
-        vector_db.create_table("articles", schema=Article, mode="overwrite")
-        
-        for txt_file in DATA_PATH.glob("*.txt"):
-            txt_file.unlink()
-        for pdf_file in DATA_PATH.glob("*.pdf"):
-            pdf_file.unlink()
-        
+        table = get_vector_db_table()
+        df = table.to_pandas()
+        user_files = set(df.loc[df['owner_id'] == owner_id, 'filepath'])
+            
+        for fp in user_files:
+            txt_path = Path(fp)
+            txt_path.unlink(missing_ok=True)
+            txt_path.with_suffix('.pdf').unlink(missing_ok=True)
+            
+            user_dir = txt_path.parent
+            if user_dir != DATA_PATH and user_dir.exists() and not any(user_dir.iterdir()):
+                user_dir.rmdir()
+
+        table.delete(f"owner_id = '{owner_id}'")
+        table.compact_files()
+        table.cleanup_old_versions(older_than=timedelta(seconds=0))
+
         return {
             "success": True,
             "message": "Knowledge base has been completely reset"

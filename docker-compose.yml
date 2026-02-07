@@ -1,25 +1,25 @@
-version: '3.8'
-
 services:
   fastapi:
-    build: .
+    image: ambro333/rag-app:latest
     container_name: rag-api
     ports:
       - "8000:8000"
     environment:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - RAG_SECRET_KEY=${RAG_SECRET_KEY}
     volumes:
-      - ./data:/app/data
-      - ./knowledge_base:/app/knowledge_base
+      - ./data:/app/data:Z
+      - ./knowledge_base:/app/knowledge_base:Z
     command: uvicorn api:app --host 0.0.0.0 --port 8000
     restart: unless-stopped
 
   streamlit:
-    build: .
     container_name: rag-frontend
     ports:
       - "8501:8501"
+    environment:
+      - API_URL=http://fastapi:8000
     depends_on:
       - fastapi
-    command: streamlit run frontend/app.py --server.address 0.0.0.0
+    command: streamlit run frontend/app.py --server.address 0.0.0.0 --server.maxUploadSize 1000
     restart: unless-stopped

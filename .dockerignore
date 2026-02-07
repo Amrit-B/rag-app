@@ -19,3 +19,4 @@ activate/
 uv.lock
 .python-version
 README.md
+deploy.sh

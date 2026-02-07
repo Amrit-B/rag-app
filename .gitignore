@@ -9,3 +9,31 @@ wheels/
 # Virtual environments
 .venv
 .env
+
+# User data and databases
+data/
+knowledge_base/
+auth.db
+*.db
+
+# Private/debug scripts
+check_users.py
+scp
+
+# Deployment artifacts
+deploy.zip
+deploy.sh
+deploy.yml
+*.log
+
+# SSH keys
+*.key
+*.pem
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
