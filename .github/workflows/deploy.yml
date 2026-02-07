@@ -45,11 +45,10 @@ jobs:
             set -e
             cd ${{ secrets.VM_APP_PATH }}
             
-            # Try podman first, then docker
             if command -v podman >/dev/null 2>&1; then
               sudo podman pull docker.io/ambro333/rag-app:latest
-              sudo podman compose pull
-              sudo podman compose up -d --remove-orphans
+              sudo /usr/local/bin/podman-compose pull
+              sudo /usr/local/bin/podman-compose up -d --remove-orphans
             elif command -v docker >/dev/null 2>&1; then
               docker pull ambro333/rag-app:latest
               if docker compose version >/dev/null 2>&1; then
