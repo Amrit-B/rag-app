@@ -23,7 +23,7 @@ scp
 # Deployment artifacts
 deploy.zip
 deploy.sh
-deploy.yml
+/deploy.yml
 *.log
 
 # SSH keys
