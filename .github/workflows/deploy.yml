@@ -44,7 +44,14 @@ jobs:
           script: |
             set -e
             cd ${{ secrets.VM_APP_PATH }}
-            if command -v docker >/dev/null 2>&1; then
+            
+            # Try podman first, then docker
+            if command -v podman >/dev/null 2>&1; then
+              sudo podman pull docker.io/ambro333/rag-app:latest
+              sudo podman compose pull
+              sudo podman compose up -d --remove-orphans
+            elif command -v docker >/dev/null 2>&1; then
+              docker pull ambro333/rag-app:latest
               if docker compose version >/dev/null 2>&1; then
                 docker compose pull
                 docker compose up -d --remove-orphans
@@ -53,6 +60,6 @@ jobs:
                 docker-compose up -d --remove-orphans
               fi
             else
-              echo "Docker is not installed on the VM" >&2
+              echo "Neither podman nor docker is installed on the VM" >&2
               exit 1
             fi
