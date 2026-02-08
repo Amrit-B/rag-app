@@ -10,7 +10,7 @@ services:
     volumes:
       - ./data:/app/data:Z
       - ./knowledge_base:/app/knowledge_base:Z
-    command: uvicorn api:app --host 0.0.0.0 --port 8000
+    command: uvicorn api:app --host 0.0.0.0 --port 8000 --workers 2
     restart: unless-stopped
 
   streamlit:
