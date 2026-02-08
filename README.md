@@ -10,6 +10,10 @@ A retrieval-augmented generation (RAG) system combining document search with AI-
 - User Authentication: Secure login and registration with JWT tokens
 - Vector Database: LanceDB for efficient semantic search over document embeddings
 
+## Live Demo
+
+Access the live application at: **https://amritb.me**
+
 ## Tech Stack
 
 - Backend: FastAPI with async processing
