@@ -1,29 +1,32 @@
-# RAG Application - Oracle Cloud Deployment
+# RAG Application - Deployment Guide
 
 ## Local Development
 
 1. Install dependencies:
 ```bash
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
 2. Set environment variables in `.env`:
 ```
 GOOGLE_API_KEY=your_api_key_here
+RAG_SECRET_KEY=your_secret_key
 ```
 
 3. Run locally:
 ```bash
 # Terminal 1 - FastAPI
-uvicorn api:app --reload
+python -m uvicorn api:app --reload
 
 # Terminal 2 - Streamlit
 streamlit run frontend/app.py
 ```
 
-## Docker Deployment
+## Local Docker Testing
 
-### Build and run locally:
+Build and test with Docker:
 ```bash
 docker-compose up --build
 ```
@@ -32,71 +35,123 @@ Access:
 - Frontend: http://localhost:8501
 - API: http://localhost:8000
 
-### Deploy to Oracle Cloud
+## Automated CI/CD Deployment
 
-#### Prerequisites:
-- Oracle Cloud account
-- Docker installed locally
-- Oracle CLI (OCI) configured
+This application uses **GitHub Actions for automatic deployment**.
 
-#### Steps:
+### How It Works
 
-1. **Create Compute Instance:**
-   - Login to Oracle Cloud Console
-   - Navigate to Compute > Instances
-   - Create instance (Ubuntu 22.04, minimum 2 OCPU, 8GB RAM)
-   - Open ports: 8000 (API), 8501 (Frontend), 22 (SSH)
+1. **Push to main branch** triggers GitHub Actions workflow
+2. **Docker image** is built and pushed to Docker Hub (`ambro333/rag-app:latest`)
+3. **SSH connection** to Oracle Cloud VM executes deployment script
+4. **Containers** are pulled and restarted with latest image
+5. **Nginx** reverse proxy with SSL serves the application
 
-2. **SSH into instance:**
+### Prerequisites
+
+Before first deployment, ensure:
+
+1. **GitHub Secrets configured** (in repository settings):
+   - `DOCKER_USERNAME` - Docker Hub username
+   - `DOCKER_PASSWORD` - Docker Hub access token
+   - `VM_HOST` - Oracle Cloud VM public IP
+   - `VM_USER` - SSH username (e.g., `opc`)
+   - `VM_SSH_KEY` - Private SSH key
+   - `VM_SSH_PORT` - SSH port (default: 22)
+   - `VM_APP_PATH` - App directory on VM (e.g., `~/rag_app`)
+
+2. **VM Setup** (one-time):
+   ```bash
+   ssh -i <your-key> opc@<vm-ip>
+   
+   # Install podman and podman-compose
+   sudo dnf install -y podman podman-compose
+   
+   # Clone repository
+   git clone <repo-url> ~/rag_app
+   cd ~/rag_app
+   
+   # Create .env file with secrets
+   cat > .env << EOF
+   GOOGLE_API_KEY=your_api_key
+   RAG_SECRET_KEY=your_secret_key
+   EOF
+   ```
+
+3. **Nginx Configuration** (one-time):
+   - SSL certificate setup with Let's Encrypt
+   - Reverse proxy to container ports (8000, 8501)
+
+### Deployment Workflow
+
+The workflow (`.github/workflows/deploy.yml`) automatically:
+1. Builds multi-stage Docker image
+2. Pushes to Docker Hub as `ambro333/rag-app:latest`
+3. SSH into VM and runs:
+   ```bash
+   sudo podman pull docker.io/ambro333/rag-app:latest
+   sudo /usr/local/bin/podman-compose pull
+   sudo /usr/local/bin/podman-compose up -d --remove-orphans
+   ```
+4. Containers restart with new image
+
+### Manual Deployment (if needed)
+
+If automated deployment fails, deploy manually:
+
 ```bash
-ssh -i <your-key.pem> ubuntu@<instance-ip>
+ssh -i /path/to/key opc@<vm-ip>
+cd ~/rag_app
+
+# Pull latest image and restart
+sudo podman pull docker.io/ambro333/rag-app:latest
+sudo /usr/local/bin/podman-compose down
+sudo /usr/local/bin/podman-compose up -d
+
+# Check status
+sudo podman ps
 ```
 
-3. **Install Docker on instance:**
+### Viewing Logs
+
+**On VM:**
 ```bash
-sudo apt update
-sudo apt install -y docker.io docker-compose git
-sudo systemctl start docker
-sudo systemctl enable docker
-sudo usermod -aG docker $USER
+# FastAPI backend
+sudo podman logs rag-api -f
+
+# Streamlit frontend
+sudo podman logs rag-frontend -f
+
+# Nginx access logs
+sudo tail -f /var/log/nginx/access.log
 ```
 
-4. **Clone your repository:**
+### Troubleshooting
+
+**Old images still running:**
 ```bash
-git clone <your-repo-url>
-cd RAG
+# Remove old local images
+sudo podman rmi docker.io/ambro333/rag-app:latest 2>&1 || true
+
+# Restart containers
+sudo /usr/local/bin/podman-compose down
+sudo /usr/local/bin/podman-compose up -d
 ```
 
-5. **Create .env file:**
+**Container won't start:**
 ```bash
-echo "GOOGLE_API_KEY=your_key_here" > .env
+# Check logs for errors
+sudo podman logs <container-name>
+
+# Verify environment variables
+cat ~/rag_app/.env
 ```
 
-6. **Run with Docker Compose:**
-```bash
-docker-compose up -d
-```
+## Application Access
 
-7. **Configure Security List (Oracle Cloud Console):**
-   - Go to Networking > Virtual Cloud Networks
-   - Select your VCN > Security Lists
-   - Add Ingress Rules:
-     - Port 8000 (API)
-     - Port 8501 (Frontend)
-
-8. **Access your app:**
-   - Frontend: http://<instance-ip>:8501
-   - API: http://<instance-ip>:8000
-
-#### Optional: Use Oracle Container Registry
-
-1. **Tag and push image:**
-```bash
-docker tag rag-api <region>.ocir.io/<tenancy-namespace>/rag-api:latest
-docker push <region>.ocir.io/<tenancy-namespace>/rag-api:latest
-```
-
-2. **Deploy from registry on compute instance**
+- **Frontend**: https://amritb.me (via Nginx SSL)
+- **API**: https://amritb.me/api (backend running in container)
+- **Local development**: http://localhost:8501 (Streamlit)
 
 ## Environment Variables
 

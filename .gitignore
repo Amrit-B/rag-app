@@ -19,6 +19,8 @@ auth.db
 # Private/debug scripts
 check_users.py
 scp
+nginx_access.log
+
 
 # Deployment artifacts
 deploy.zip
@@ -37,3 +39,5 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/*.bak
+
+analyze_logs.py
