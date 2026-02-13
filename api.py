@@ -25,8 +25,6 @@ class LoginModel(BaseModel):
 
 app = FastAPI()
 
-ingestion_status = {}
-
 processing_lock = asyncio.Lock()
 
 app.add_middleware(
@@ -92,25 +90,11 @@ async def login(payload: LoginModel):
 
 
 async def process_document_background(pdf_path: Path, owner_id: str):
-    def update_progress(p, m):
-        ingestion_status[owner_id] = {"progress": p, "message": m}
-
     async with processing_lock:
         try:
-            update_progress(0.01, "Starting...")
-            await asyncio.to_thread(ingest_single_document, pdf_path, owner_id, update_progress)
+            await asyncio.to_thread(ingest_single_document, pdf_path, owner_id)
         except Exception as e:
             print(f"Error processing {pdf_path.name}: {e}")
-            update_progress(-1.0, f"Error: {str(e)}")
-        finally:
-            # Clean up completed entries from status dict
-            owner_id_str = str(owner_id)
-            if owner_id_str in ingestion_status and ingestion_status[owner_id_str].get("progress") >= 1.0:
-                ingestion_status.pop(owner_id_str, None)
-
-@app.get('/rag/status')
-async def get_status(current_user: dict = Depends(get_current_user)):
-    return ingestion_status.get(str(current_user['id']), {"progress": 0, "message": "Idle"})
 
 @app.post('/rag/upload')
 async def upload_pdf(
