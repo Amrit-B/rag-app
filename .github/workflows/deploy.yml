@@ -51,7 +51,6 @@ jobs:
             cd ${{ secrets.VM_APP_PATH }}
             
             if command -v podman >/dev/null 2>&1; then
-              # Clean up unused images and containers
               sudo podman system prune -a --force 2>&1 || true
               
               sudo podman pull docker.io/ambro333/rag-app:latest

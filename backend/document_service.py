@@ -121,7 +121,6 @@ def list_documents(owner_id: str) -> list:
     try:
         table = get_vector_db_table()
         df = table.to_pandas()
-        # Filter by owner_id before returning
         df = df[df['owner_id'] == owner_id]
         docs = df[['doc_id', 'filename', 'owner_id']].drop_duplicates().to_dict('records')
         return docs
@@ -133,7 +132,6 @@ def delete_document(doc_id: str, owner_id: str) -> dict:
     try:
         table = get_vector_db_table()
 
-        # Get filepaths before deletion
         try:
             df = table.to_pandas()
             matches = df[(df['doc_id'] == doc_id) & (df['owner_id'] == owner_id)]

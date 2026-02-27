@@ -1,9 +1,7 @@
 from pydantic import BaseModel, Field
 from lancedb.embeddings import get_registry
 from lancedb.pydantic import LanceModel, Vector
-from dotenv import load_dotenv
 
-load_dotenv()
 embedding_model = get_registry().get("sentence-transformers").create(name="all-MiniLM-L6-v2", device="cpu")
 
 EMBEDDING_DIM = 384

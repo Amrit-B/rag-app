@@ -2,7 +2,7 @@ from pathlib import Path
 import os
 import sys
 
-# Location for per-user auth DB (SQLite)
+# Location for per-user auth DB 
 AUTH_DB_PATH = Path(__file__).parents[1] / "data" / "auth.db"
 
 # JWT secret (override with env var in production)

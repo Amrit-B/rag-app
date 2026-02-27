@@ -25,7 +25,18 @@ class LoginModel(BaseModel):
 
 app = FastAPI()
 
-processing_lock = asyncio.Lock()
+ingestion_semaphore = asyncio.Semaphore(2)
+
+
+def _search_user_chunks(query_text: str, owner_id: str):
+    vector_db = lancedb.connect(uri=VECTOR_DATABASE_PATH)
+    table = vector_db.open_table('articles_chunks')
+    return table.search(query=query_text).where(f"owner_id = '{owner_id}'").limit(50).to_list()
+
+
+def _save_upload_file(src_file, dest_path: Path) -> None:
+    with open(dest_path, 'wb') as buffer:
+        shutil.copyfileobj(src_file, buffer)
 
 app.add_middleware(
     CORSMiddleware,
@@ -45,34 +56,30 @@ def root():
 
 @app.post('/rag/query')
 async def query_documentation(query: Prompt, current_user: dict = Depends(get_current_user)):
-    async with processing_lock:
-        try:
-            vector_db = lancedb.connect(uri=VECTOR_DATABASE_PATH)
-            table = vector_db.open_table('articles_chunks')
+    try:
+        results = await asyncio.to_thread(_search_user_chunks, query.prompt, str(current_user['id']))
 
-            results = table.search(query=query.prompt).where(f"owner_id = '{current_user['id']}'").limit(50).to_list()
+        if not results:
+            raise HTTPException(status_code=404, detail="No documents found for this user")
 
-            if not results:
-                raise HTTPException(status_code=404, detail="No documents found for this user")
+        combined = "\n\n".join([
+            f"Document: {r.get('filename')}\nSource Path: {r.get('filepath')}\nContent Snippet:\n{ (r.get('content') or '')[:4000] }"
+            for r in results
+        ])
 
-            combined = "\n\n".join([
-                f"Document: {r.get('filename')}\nSource Path: {r.get('filepath')}\nContent Snippet:\n{ (r.get('content') or '')[:4000] }"
-                for r in results
-            ])
-
-            prompt_with_context = (
-                f"Context:\n{combined}\n\nQuestion: {query.prompt}"
-            )
-            result = await rag_agent.run(prompt_with_context)
-            
-            return {
-                "answer": result.output,
-                "filepath": ", ".join(list(set(r.get('filename') for r in results)))
-            }
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+        prompt_with_context = (
+            f"Context:\n{combined}\n\nQuestion: {query.prompt}"
+        )
+        result = await rag_agent.run(prompt_with_context)
+        
+        return {
+            "answer": result.output,
+            "filepath": ", ".join(list(set(r.get('filename') for r in results)))
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post('/auth/register')
 async def register_user(payload: RegisterModel):
@@ -90,7 +97,7 @@ async def login(payload: LoginModel):
 
 
 async def process_document_background(pdf_path: Path, owner_id: str):
-    async with processing_lock:
+    async with ingestion_semaphore:
         try:
             await asyncio.to_thread(ingest_single_document, pdf_path, owner_id)
         except Exception as e:
@@ -110,8 +117,7 @@ async def upload_pdf(
     pdf_path = user_dir / Path(file.filename).name
     
     try:
-        with open(pdf_path, 'wb') as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        await asyncio.to_thread(_save_upload_file, file.file, pdf_path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"File save failed: {str(e)}")
     finally:
