@@ -14,6 +14,10 @@ import shutil
 import lancedb
 import asyncio
 
+RETRIEVAL_LIMIT = 10
+MAX_SNIPPET_CHARS = 1000
+MAX_CONTEXT_CHARS = 16000
+
 class RegisterModel(BaseModel):
     username: str
     password: str
@@ -31,12 +35,58 @@ ingestion_semaphore = asyncio.Semaphore(2)
 def _search_user_chunks(query_text: str, owner_id: str):
     vector_db = lancedb.connect(uri=VECTOR_DATABASE_PATH)
     table = vector_db.open_table('articles_chunks')
-    return table.search(query=query_text).where(f"owner_id = '{owner_id}'").limit(50).to_list()
+    return table.search(query=query_text).where(f"owner_id = '{owner_id}'").limit(RETRIEVAL_LIMIT).to_list()
 
 
 def _save_upload_file(src_file, dest_path: Path) -> None:
     with open(dest_path, 'wb') as buffer:
         shutil.copyfileobj(src_file, buffer)
+
+
+def _dedupe_results(results: list[dict]) -> list[dict]:
+    deduped: list[dict] = []
+    seen_chunk_ids: set[str] = set()
+    seen_signatures: set[str] = set()
+
+    for item in results:
+        chunk_id = str(item.get('chunk_id', ''))
+        if chunk_id and chunk_id in seen_chunk_ids:
+            continue
+
+        content = (item.get('content') or '').strip()
+        signature = content[:300]
+        if signature and signature in seen_signatures:
+            continue
+
+        if chunk_id:
+            seen_chunk_ids.add(chunk_id)
+        if signature:
+            seen_signatures.add(signature)
+        deduped.append(item)
+
+    return deduped
+
+
+def _build_context(results: list[dict]) -> str:
+    blocks: list[str] = []
+    total_chars = 0
+
+    for item in results:
+        snippet = (item.get('content') or '')[:MAX_SNIPPET_CHARS]
+        block = (
+            f"Document: {item.get('filename')}\n"
+            f"Source Path: {item.get('filepath')}\n"
+            f"Content Snippet:\n{snippet}"
+        )
+
+        block_len = len(block) + 2
+        if total_chars + block_len > MAX_CONTEXT_CHARS:
+            break
+
+        blocks.append(block)
+        total_chars += block_len
+
+    return "\n\n".join(blocks)
 
 app.add_middleware(
     CORSMiddleware,
@@ -58,16 +108,16 @@ def root():
 async def query_documentation(query: Prompt, current_user: dict = Depends(get_current_user)):
     try:
         results = await asyncio.to_thread(_search_user_chunks, query.prompt, str(current_user['id']))
+        results = _dedupe_results(results)
 
         if not results:
             raise HTTPException(status_code=404, detail="No documents found for this user")
 
-        combined = "\n\n".join([
-            f"Document: {r.get('filename')}\nSource Path: {r.get('filepath')}\nContent Snippet:\n{ (r.get('content') or '')[:4000] }"
-            for r in results
-        ])
+        combined = _build_context(results)
 
         prompt_with_context = (
+            "Use only the provided context. Copy names, titles, dates, and numbers exactly as written. "
+            "If a requested fact is missing, say 'Not found in provided context.'\n\n"
             f"Context:\n{combined}\n\nQuestion: {query.prompt}"
         )
         result = await rag_agent.run(prompt_with_context)

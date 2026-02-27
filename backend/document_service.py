@@ -18,13 +18,25 @@ def extract_text_from_pdf(pdf_path: Path) -> str:
     return all_text
 
 
-def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> list[str]:
+def chunk_text(text: str, chunk_size: int = 220, overlap: int = 50) -> list[str]:
     if not text:
         return []
-    chunks = []
-    step = chunk_size - overlap
-    for i in range(0, len(text), step):
-        chunks.append(text[i : i + chunk_size])
+
+    words = text.split()
+    if not words:
+        return []
+
+    if overlap >= chunk_size:
+        overlap = max(0, chunk_size // 4)
+
+    step = max(1, chunk_size - overlap)
+    chunks: list[str] = []
+    for i in range(0, len(words), step):
+        chunk_words = words[i : i + chunk_size]
+        if not chunk_words:
+            continue
+        chunks.append(" ".join(chunk_words))
+
     return chunks
 
 
