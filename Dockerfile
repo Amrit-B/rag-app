@@ -18,8 +18,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Inject Google Analytics into Streamlit's native index.html
-RUN sed -i 's|<head>|<head><script async src="https://www.googletagmanager.com/gtag/js?id=G-4WVG826P17"></script><script>window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag("js", new Date()); gtag("config", "G-4WVG826P17");</script>|' /usr/local/lib/python3.11/site-packages/streamlit/static/index.html
-# Set PYTHONPATH to ensure backend module is found without __init__.py
+RUN sed -i "s@<head>@<head><script async src='https://www.googletagmanager.com/gtag/js?id=G-4WVG826P17'></script><script>window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', 'G-4WVG826P17');</script>@g" /usr/local/lib/python3.11/site-packages/streamlit/static/index.html# Set PYTHONPATH to ensure backend module is found without __init__.py
+
 ENV PYTHONPATH=/app
 
 # Expose ports for FastAPI and Streamlit
