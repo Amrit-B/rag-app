@@ -1,23 +1,10 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import requests
 from pathlib import Path
 import os
 
 API_URL = os.getenv('API_URL', 'http://localhost:8000')
 
-def inject_ga():
-    ga_code = """
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-4WVG826P17"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-
-      gtag('config', 'G-4WVG826P17');
-    </script>
-    """
-    components.html(ga_code, height=0)
 
 def init_session():
     if 'token' not in st.session_state:
@@ -237,8 +224,6 @@ def show_about():
 
 if __name__=="__main__":
     st.set_page_config(page_title="RAG Assistant", layout="wide", initial_sidebar_state="expanded")
-
-    inject_ga()
 
     tab1, tab2 = st.tabs(["🤖 RAG Assistant", "📖 About"])
 
