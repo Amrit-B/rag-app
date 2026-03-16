@@ -50,24 +50,27 @@ jobs:
             set -e
             cd ${{ secrets.VM_APP_PATH }}
             
+            sudo fuser -k 8000/tcp || true
+            sudo fuser -k 8501/tcp || true
+            
             if command -v podman >/dev/null 2>&1; then
               sudo podman system prune -a --force 2>&1 || true
-              
               sudo podman pull docker.io/ambro333/rag-app:latest
               sudo /usr/local/bin/podman-compose pull
+              sudo /usr/local/bin/podman-compose down || true
               sudo /usr/local/bin/podman-compose up -d --remove-orphans
             elif command -v docker >/dev/null 2>&1; then
               docker system prune -a --force 2>&1 || true
-              
               docker pull ambro333/rag-app:latest
               if docker compose version >/dev/null 2>&1; then
+                docker compose down || true
                 docker compose pull
                 docker compose up -d --remove-orphans
               else
+                docker-compose down || true
                 docker-compose pull
                 docker-compose up -d --remove-orphans
               fi
-            else
-              echo "Neither podman nor docker is installed on the VM" >&2
-              exit 1
             fi
+            
+            sudo systemctl restart nginx
