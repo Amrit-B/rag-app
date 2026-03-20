@@ -7,9 +7,11 @@ services:
     environment:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - RAG_SECRET_KEY=${RAG_SECRET_KEY}
+    security_opt:
+      - label=disable
     volumes:
-      - ./data:/app/data:Z
-      - ./knowledge_base:/app/knowledge_base:Z
+      - ./data:/app/data
+      - ./knowledge_base:/app/knowledge_base
     command: uvicorn api:app --host 0.0.0.0 --port 8000 --workers 2
     restart: unless-stopped
 
@@ -20,6 +22,8 @@ services:
       - "8501:8501"
     environment:
       - API_URL=http://fastapi:8000
+    security_opt:
+      - label=disable
     depends_on:
       - fastapi
     command: streamlit run frontend/app.py --server.address 0.0.0.0 --server.maxUploadSize 1000
