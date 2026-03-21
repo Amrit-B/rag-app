@@ -27,6 +27,8 @@ deploy.zip
 deploy.sh
 /deploy.yml
 *.log
+/backup_nginx
+/backup_rag_app
 
 # SSH keys
 *.key
