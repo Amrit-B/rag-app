@@ -13,6 +13,7 @@ from pathlib import Path
 import shutil
 import lancedb
 import asyncio
+from uuid import uuid4
 
 RETRIEVAL_LIMIT = 10
 MAX_SNIPPET_CHARS = 1000
@@ -30,6 +31,7 @@ class LoginModel(BaseModel):
 app = FastAPI()
 
 ingestion_semaphore = asyncio.Semaphore(2)
+ingestion_jobs: dict[str, dict] = {}
 
 
 def _search_user_chunks(query_text: str, owner_id: str):
@@ -146,11 +148,25 @@ async def login(payload: LoginModel):
     return {"access_token": token}
 
 
-async def process_document_background(pdf_path: Path, owner_id: str):
+def _set_job_status(job_id: str, status: str, error: str | None = None) -> None:
+    job = ingestion_jobs.get(job_id)
+    if not job:
+        return
+    job['status'] = status
+    job['error'] = error
+
+
+async def process_document_background(pdf_path: Path, owner_id: str, job_id: str):
     async with ingestion_semaphore:
         try:
-            await asyncio.to_thread(ingest_single_document, pdf_path, owner_id)
+            _set_job_status(job_id, 'processing')
+            result = await asyncio.to_thread(ingest_single_document, pdf_path, owner_id)
+            if result.get('success'):
+                _set_job_status(job_id, 'completed')
+            else:
+                _set_job_status(job_id, 'failed', result.get('error') or result.get('message'))
         except Exception as e:
+            _set_job_status(job_id, 'failed', str(e))
             print(f"Error processing {pdf_path.name}: {e}")
 
 @app.post('/rag/upload')
@@ -173,12 +189,38 @@ async def upload_pdf(
     finally:
         file.file.close()
 
-    background_tasks.add_task(process_document_background, pdf_path, str(current_user['id']))
+    job_id = str(uuid4())
+    ingestion_jobs[job_id] = {
+        'owner_id': str(current_user['id']),
+        'filename': file.filename,
+        'status': 'queued',
+        'error': None,
+    }
+
+    background_tasks.add_task(process_document_background, pdf_path, str(current_user['id']), job_id)
     
     return {
         "status": "success",
         "message": "File uploaded. Processing started.",
-        "filename": file.filename
+        "filename": file.filename,
+        "job_id": job_id,
+    }
+
+
+@app.get('/rag/upload-status/{job_id}')
+async def get_upload_status(job_id: str, current_user: dict = Depends(get_current_user)):
+    job = ingestion_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if str(job.get('owner_id')) != str(current_user['id']):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    return {
+        'job_id': job_id,
+        'filename': job.get('filename'),
+        'status': job.get('status'),
+        'error': job.get('error'),
     }
 
 @app.get('/rag/documents')

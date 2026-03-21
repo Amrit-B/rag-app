@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 from pathlib import Path
 import os
+import time
 
 API_URL = os.getenv('API_URL', 'http://localhost:8000')
 
@@ -13,6 +14,8 @@ def init_session():
         st.session_state['username'] = None
     if 'confirm_reset' not in st.session_state:
         st.session_state['confirm_reset'] = False
+    if 'pending_job_id' not in st.session_state:
+        st.session_state['pending_job_id'] = None
 
 
 def auth_headers():
@@ -20,6 +23,24 @@ def auth_headers():
     if token:
         return {"Authorization": f"Bearer {token}"}
     return {}
+
+
+def wait_for_ingestion(job_id: str, timeout_seconds: int = 60) -> tuple[str, str | None]:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        try:
+            response = requests.get(f'{API_URL}/rag/upload-status/{job_id}', headers=auth_headers())
+            if response.status_code == 200:
+                payload = response.json()
+                status = payload.get('status', 'queued')
+                if status in {'completed', 'failed'}:
+                    return status, payload.get('error')
+            elif response.status_code == 404:
+                return 'failed', 'Upload job not found'
+        except Exception:
+            pass
+        time.sleep(1)
+    return 'timeout', None
 
 
 def layout():
@@ -131,7 +152,22 @@ def layout():
                         
                         if response.status_code == 200:
                             data = response.json()
+                            job_id = data.get('job_id')
+                            if job_id:
+                                st.session_state['pending_job_id'] = job_id
                             st.success(f"✅ {data['message']}", icon="✅")
+                            if job_id:
+                                with st.spinner("Indexing document..."):
+                                    status, err = wait_for_ingestion(job_id)
+                                if status == 'completed':
+                                    st.session_state['pending_job_id'] = None
+                                    st.success("✅ Document indexed and ready.")
+                                    st.rerun()
+                                elif status == 'failed':
+                                    st.session_state['pending_job_id'] = None
+                                    st.error(f"❌ Indexing failed: {err or 'Unknown error'}")
+                                else:
+                                    st.info("Upload accepted. Indexing still in progress.")
                         else:
                             try:
                                 error_data = response.json()
@@ -150,6 +186,19 @@ def layout():
         submit = st.form_submit_button("Send")
         
         if submit and text_input.strip() != '':
+            pending_job_id = st.session_state.get('pending_job_id')
+            if pending_job_id:
+                status, err = wait_for_ingestion(pending_job_id, timeout_seconds=5)
+                if status == 'completed':
+                    st.session_state['pending_job_id'] = None
+                elif status == 'failed':
+                    st.session_state['pending_job_id'] = None
+                    st.error(f"❌ Previous upload indexing failed: {err or 'Unknown error'}")
+                    return
+                else:
+                    st.warning("⏳ Document is still indexing. Please wait a few seconds.")
+                    return
+
             with st.spinner("Searching and generating answer..."):
                 try:
                     response = requests.post(f'{API_URL}/rag/query',json={"prompt":text_input}, headers=auth_headers())
