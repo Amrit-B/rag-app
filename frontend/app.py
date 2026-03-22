@@ -5,6 +5,9 @@ import os
 import time
 
 API_URL = os.getenv('API_URL', 'http://localhost:8000')
+MAX_UPLOAD_MB = 200
+MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+LARGE_FILE_WARNING_MB = 50
 
 
 def init_session():
@@ -25,9 +28,9 @@ def auth_headers():
     return {}
 
 
-def wait_for_ingestion(job_id: str, timeout_seconds: int = 60) -> tuple[str, str | None]:
-    deadline = time.time() + timeout_seconds
-    while time.time() < deadline:
+def wait_for_ingestion(job_id: str, timeout_seconds: int | None = 60) -> tuple[str, str | None]:
+    deadline = time.time() + timeout_seconds if timeout_seconds is not None else None
+    while deadline is None or time.time() < deadline:
         try:
             response = requests.get(f'{API_URL}/rag/upload-status/{job_id}', headers=auth_headers())
             if response.status_code == 200:
@@ -139,9 +142,22 @@ def layout():
 
     st.markdown("---")
     st.markdown("## Upload PDF Documents")
-    uploaded_file = st.file_uploader("Upload a PDF to add to knowledge base", type=['pdf'])
+    uploaded_file = st.file_uploader(
+        f"Upload a PDF to add to knowledge base (max {MAX_UPLOAD_MB}MB)",
+        type=['pdf'],
+    )
 
     if uploaded_file is not None:
+        file_size_bytes = uploaded_file.size or 0
+        file_size_mb = file_size_bytes / (1024 * 1024)
+
+        if file_size_bytes > MAX_UPLOAD_BYTES:
+            st.error(f"❌ File is too large ({file_size_mb:.1f}MB). Max allowed is {MAX_UPLOAD_MB}MB.")
+            return
+
+        if file_size_mb >= LARGE_FILE_WARNING_MB:
+            st.warning(f"⚠️ This file is {file_size_mb:.1f}MB. Ingestion may take a while.")
+
         with st.form(key="upload_form", clear_on_submit=True):
             submit = st.form_submit_button("Process PDF")
             if submit:
@@ -158,7 +174,7 @@ def layout():
                             st.success(f"✅ {data['message']}", icon="✅")
                             if job_id:
                                 with st.spinner("Indexing document..."):
-                                    status, err = wait_for_ingestion(job_id)
+                                    status, err = wait_for_ingestion(job_id, timeout_seconds=None)
                                 if status == 'completed':
                                     st.session_state['pending_job_id'] = None
                                     st.success("✅ Document indexed and ready.")

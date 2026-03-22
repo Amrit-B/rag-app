@@ -18,6 +18,8 @@ from uuid import uuid4
 RETRIEVAL_LIMIT = 10
 MAX_SNIPPET_CHARS = 1000
 MAX_CONTEXT_CHARS = 16000
+MAX_UPLOAD_MB = 200
+MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 
 class RegisterModel(BaseModel):
     username: str
@@ -177,6 +179,20 @@ async def upload_pdf(
 ):
     if not file.filename.endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+
+    file_size_bytes = None
+    try:
+        file.file.seek(0, 2)
+        file_size_bytes = file.file.tell()
+        file.file.seek(0)
+    except Exception:
+        file_size_bytes = None
+
+    if file_size_bytes is not None and file_size_bytes > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Max upload size is {MAX_UPLOAD_MB}MB",
+        )
     
     user_dir = DATA_PATH / current_user['username']
     user_dir.mkdir(parents=True, exist_ok=True)
