@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 from pathlib import Path
 import os
+import time
 
 API_URL = os.getenv('API_URL', 'http://localhost:8000')
 
