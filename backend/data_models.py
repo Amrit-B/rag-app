@@ -1,10 +1,41 @@
 from typing import Optional, List, Any
 from pydantic import BaseModel, Field
-from lancedb.embeddings import get_registry
+from lancedb.embeddings import TextEmbeddingFunction, register, get_registry
 from lancedb.pydantic import LanceModel, Vector
+from google import genai
+from google.genai import types
 
-embedding_model = get_registry().get("sentence-transformers").create(name="all-MiniLM-L6-v2", device="cpu")
-EMBEDDING_DIM = 384
+EMBEDDING_DIM = 768
+
+
+@register("gemini-genai")
+class GeminiGenAIEmbedding(TextEmbeddingFunction):
+    name: str = "models/gemini-embedding-001"
+    dim: int = 768
+
+    def ndims(self) -> int:
+        return self.dim
+
+    def generate_embeddings(self, texts: list[str], *args, **kwargs) -> list:
+        if isinstance(texts, str):
+            texts = [texts]
+        if not texts:
+            return []
+        client = genai.Client()
+        all_embeddings = []
+        batch_size = 50
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i : i + batch_size]
+            res = client.models.embed_content(
+                model=self.name,
+                contents=batch,
+                config=types.EmbedContentConfig(output_dimensionality=self.dim),
+            )
+            all_embeddings.extend([e.values for e in res.embeddings])
+        return all_embeddings
+
+
+embedding_model = get_registry().get("gemini-genai").create()
 
 
 class ChunkArticle(LanceModel):

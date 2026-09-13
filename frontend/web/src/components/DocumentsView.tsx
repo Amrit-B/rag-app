@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { DocumentRecord, uploadDocument, pollUploadStatus, deleteDocument, resetKnowledgeBase } from "@/lib/api";
 import {
   UploadCloud,
@@ -34,12 +34,22 @@ export default function DocumentsView({
   const [isResetting, setIsResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Clean up interval on unmount
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
 
   const totalChunks = documents.reduce((acc, d) => acc + (d.chunk_count || 0), 0);
   const totalSizeBytes = documents.reduce((acc, d) => acc + (d.file_size_bytes || 0), 0);
   const totalSizeMB = (totalSizeBytes / (1024 * 1024)).toFixed(2);
 
   const handleFileUpload = async (file: File) => {
+    if (uploading) return;
+
     if (!username) {
       onOpenAuth();
       return;
@@ -56,19 +66,22 @@ export default function DocumentsView({
 
     try {
       const { job_id } = await uploadDocument(file);
-      setUploadStatusText("Cleaning noise & generating technical chunks...");
+      setUploadStatusText("Extracting text, chunking & generating embeddings...");
+
+      // Clear any prior interval
+      if (intervalRef.current) clearInterval(intervalRef.current);
 
       // Poll until finished
-      const interval = setInterval(async () => {
+      intervalRef.current = setInterval(async () => {
         try {
           const res = await pollUploadStatus(job_id);
           if (res.status === "completed") {
-            clearInterval(interval);
+            if (intervalRef.current) clearInterval(intervalRef.current);
             setUploading(false);
             setUploadStatusText(null);
             onRefresh();
           } else if (res.status === "failed") {
-            clearInterval(interval);
+            if (intervalRef.current) clearInterval(intervalRef.current);
             setUploading(false);
             setUploadStatusText(null);
             setError(res.error || "Ingestion failed.");
@@ -77,8 +90,9 @@ export default function DocumentsView({
         } catch {
           // keep polling
         }
-      }, 1200);
+      }, 1000);
     } catch (err: any) {
+      if (intervalRef.current) clearInterval(intervalRef.current);
       setUploading(false);
       setUploadStatusText(null);
       setError(err.message || "Upload failed");
@@ -182,21 +196,25 @@ export default function DocumentsView({
 
       {/* Upload Dropzone */}
       <div
-        onClick={() => fileInputRef.current?.click()}
-        className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${
+        onClick={() => {
+          if (!uploading) fileInputRef.current?.click();
+        }}
+        className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all ${
           uploading
-            ? "border-indigo-500 bg-indigo-950/20"
-            : "border-slate-700/80 bg-slate-950/40 hover:border-indigo-500/60 hover:bg-slate-900/60"
+            ? "border-indigo-500/60 bg-indigo-950/30 cursor-not-allowed opacity-90 shadow-lg shadow-indigo-950/20"
+            : "border-slate-700/80 bg-slate-950/40 hover:border-indigo-500/60 hover:bg-slate-900/60 cursor-pointer"
         }`}
       >
         <input
           type="file"
           ref={fileInputRef}
           accept="application/pdf"
+          disabled={uploading}
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) handleFileUpload(file);
+            e.target.value = "";
           }}
         />
 
@@ -214,7 +232,9 @@ export default function DocumentsView({
               {uploading ? uploadStatusText : "Click or drag PDF to upload"}
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              Supports technical PDFs up to 200MB. Cleaned and indexed automatically into LanceDB.
+              {uploading
+                ? "Document ingestion is active. Please wait for processing to finish before uploading another file."
+                : "Supports technical PDFs up to 200MB. Cleaned and indexed automatically into LanceDB."}
             </p>
           </div>
         </div>

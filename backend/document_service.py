@@ -6,7 +6,7 @@ from pypdf import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from backend.constants import VECTOR_DATABASE_PATH, DATA_PATH
-from backend.data_models import ChunkArticle, embedding_model
+from backend.data_models import ChunkArticle, embedding_model, EMBEDDING_DIM
 from backend.preprocessor import clean_text
 from backend.database import (
     db_save_document,
@@ -60,16 +60,11 @@ def _safe_delete_path(path: Path) -> None:
         pass
 
 
-def _compute_embeddings(text_chunks: list[str], batch_size: int = 16) -> list:
+def _compute_embeddings(text_chunks: list[str], batch_size: int = 50) -> list:
     if not text_chunks:
         return []
 
-    embeddings: list = []
-    total = len(text_chunks)
-    for i in range(0, total, batch_size):
-        batch = text_chunks[i : i + batch_size]
-        batch_embeddings = embedding_model.compute_source_embeddings(batch)
-        embeddings.extend(batch_embeddings)
+    embeddings = embedding_model.compute_source_embeddings(text_chunks)
 
     if len(embeddings) != len(text_chunks):
         raise ValueError(f"Embedding count ({len(embeddings)}) does not match chunk count ({len(text_chunks)})")
@@ -82,6 +77,10 @@ def get_vector_db_table():
     vector_db = lancedb.connect(uri=VECTOR_DATABASE_PATH)
     try:
         table = vector_db.open_table("articles_chunks")
+        # Check if vector dimension matches current EMBEDDING_DIM
+        dim = table.schema.field("embedding").type.list_size
+        if dim != EMBEDDING_DIM:
+            table = vector_db.create_table("articles_chunks", schema=ChunkArticle, mode="overwrite")
     except Exception:
         table = vector_db.create_table("articles_chunks", schema=ChunkArticle, mode="overwrite")
     return table

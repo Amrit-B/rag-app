@@ -207,9 +207,9 @@ export default function Home() {
         onLogout={handleLogout}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden">
-        {activeTab === "chat" && (
+      {/* Main Content Area - views stay mounted so background uploads/timers are never destroyed */}
+      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+        <div className={activeTab === "chat" ? "h-full w-full flex flex-col" : "hidden"}>
           <ChatArea
             messages={messages}
             loading={loading}
@@ -218,20 +218,24 @@ export default function Home() {
             documentCount={documents.length}
             onNavigateToDocuments={() => setActiveTab("documents")}
           />
-        )}
+        </div>
 
-        {activeTab === "documents" && (
+        <div className={activeTab === "documents" ? "h-full w-full flex flex-col overflow-hidden" : "hidden"}>
           <DocumentsView
             documents={documents}
             onRefresh={loadDocuments}
             username={username}
             onOpenAuth={() => setAuthModalOpen(true)}
           />
-        )}
+        </div>
 
-        {activeTab === "observability" && <ObservabilityView />}
+        <div className={activeTab === "observability" ? "h-full w-full flex flex-col overflow-hidden" : "hidden"}>
+          {activeTab === "observability" && <ObservabilityView />}
+        </div>
 
-        {activeTab === "about" && <AboutView />}
+        <div className={activeTab === "about" ? "h-full w-full flex flex-col overflow-hidden" : "hidden"}>
+          <AboutView />
+        </div>
       </main>
 
       {/* Authentication Modal */}

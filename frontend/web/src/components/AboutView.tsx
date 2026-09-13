@@ -116,7 +116,7 @@ export default function AboutView() {
             <span>08amrit@gmail.com</span>
           </a>
           <a
-            href="https://www.linkedin.com/in/amrit-bhaganagare/"
+            href="https://www.linkedin.com/in/amritb08/"
             target="_blank"
             rel="noreferrer"
             className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs text-slate-300 transition-colors"
