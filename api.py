@@ -8,6 +8,7 @@ import shutil
 import asyncio
 from uuid import uuid4
 import time
+import re
 
 from backend.constants import DATA_PATH
 from backend import auth
@@ -171,6 +172,87 @@ async def query_documentation(query: Prompt, current_user: dict = Depends(get_cu
             sender="user",
             content=query.prompt,
         )
+
+        # Fast-Path Evaluation for Greetings, System Privacy, and 0-Document State
+        prompt_trimmed = query.prompt.strip()
+        user_docs = list_documents(owner_id=user_id)
+        doc_count = len(user_docs)
+
+        fast_answer = None
+        fast_route = None
+
+        # 1. Privacy / Multi-Tenant Isolation Questions
+        if re.search(r"\b(access|see|view|read|share)\s+(other|another|anyone else's)\s*(user|users|people|person)?'?s?\s*(file|files|doc|docs|document|documents|data)\b", prompt_trimmed, re.IGNORECASE) or \
+           re.search(r"\b(can you access other user|can other users see my|is my data (private|isolated|secure))\b", prompt_trimmed, re.IGNORECASE):
+            fast_answer = (
+                "### 🔒 Strict Multi-Tenant Isolation & Privacy\n\n"
+                "**No. I cannot access, search, or view documents uploaded by other users, and other users cannot access yours.**\n\n"
+                "- **Partitioned Storage**: Every document chunk in LanceDB is indexed with your unique `owner_id`.\n"
+                "- **Isolated Vector Retrieval**: All vector similarity queries enforce `owner_id = '{user_id}'` at the database level.\n"
+                "- **Session Privacy**: Chat histories and metadata are partitioned in SQLite by your user credentials."
+            )
+            fast_route = "security"
+
+        # 2. Conversational Greetings & Introductions
+        elif re.search(r"^(hi|hello|hey|greetings|howdy|good\s+(morning|afternoon|evening)|sup|what'?s\s+up)[\s!.,?]*$", prompt_trimmed, re.IGNORECASE) or \
+             re.search(r"^(who are you|what can you do|what is this( app| project)?|help)[\s!.,?]*$", prompt_trimmed, re.IGNORECASE):
+            if doc_count == 0:
+                fast_answer = (
+                    "### Welcome to the Agentic Self-Reflective RAG Assistant! 👋\n\n"
+                    "I am powered by **LangGraph**, **LanceDB**, and **Gemini 2.5 Flash**, designed to provide grounded, citation-backed answers without hallucinations.\n\n"
+                    "📁 **Knowledge Base Status**: You currently have **no documents uploaded**.\n\n"
+                    "**To get started with document Q&A:**\n"
+                    "1. Click the **Knowledge Base** tab in the sidebar.\n"
+                    "2. Upload your PDF files (lecture slides, research papers, reports, manuals).\n"
+                    "3. Return to this chat to ask questions—I will retrieve relevant passages, grade relevance, and provide precise citations.\n\n"
+                    "💡 *You can also ask broad or current world questions right now, and I will use live Tavily web search to answer!*"
+                )
+            else:
+                doc_names = ", ".join([d.get("filename", "Document") for d in user_docs[:3]])
+                extra = f" (and {doc_count - 3} more)" if doc_count > 3 else ""
+                fast_answer = (
+                    f"### Hello! How can I assist you today? 👋\n\n"
+                    f"📁 **Knowledge Base Ready**: You have **{doc_count} document{'s' if doc_count != 1 else ''}** indexed (`{doc_names}{extra}`).\n\n"
+                    f"You can ask me to:\n"
+                    f"- Summarize key findings or specific sections\n"
+                    f"- Extract data points, metrics, or technical requirements\n"
+                    f"- Cross-reference your documents with live web search\n\n"
+                    f"What would you like to explore?"
+                )
+            fast_route = "assistant"
+
+        # 3. Document Query with Zero Uploads
+        elif doc_count == 0 and (
+            re.search(r"\b(my\s+doc|my\s+file|uploaded\s+doc|uploaded\s+file|the\s+doc|the\s+pdf|in\s+my\s+documents?)\b", prompt_trimmed, re.IGNORECASE) or
+            re.search(r"^(summarize|what is in|tell me about|explain)\s+(the|my)\s+(doc|docs|document|documents|file|files|pdf)[\s!.,?]*$", prompt_trimmed, re.IGNORECASE)
+        ):
+            fast_answer = (
+                "### ⚠️ No Documents Uploaded Yet\n\n"
+                "I couldn't find any documents in your Knowledge Base to answer this question.\n\n"
+                "**Next Steps:**\n"
+                "1. Head to the **Knowledge Base** tab in the left sidebar.\n"
+                "2. Upload a PDF file to index it into LanceDB.\n"
+                "3. Return to this chat to ask questions grounded in your document's content!"
+            )
+            fast_route = "knowledge_base"
+
+        # If fast-path matched, save and return immediately (0 LLM / Tavily calls wasted!)
+        if fast_answer:
+            RAG_QUERIES_TOTAL.labels(route_taken=fast_route).inc()
+            db_add_chat_message(
+                session_id=session_id,
+                sender="assistant",
+                content=fast_answer,
+                sources=[],
+                route_taken=fast_route,
+            )
+            return RAGQueryResponse(
+                answer=fast_answer,
+                filepath="",
+                sources=[],
+                route_taken=fast_route,
+                session_id=session_id,
+            )
 
         # Execute LangGraph Multi-Step Workflow
         initial_state = {

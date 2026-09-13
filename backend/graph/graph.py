@@ -35,6 +35,10 @@ def grade_generation_grounded_in_documents_and_question(state: GraphState) -> st
         print(f"---DECISION: MAX CORRECTION LOOPS ({MAX_CORRECTION_LOOPS}) REACHED. FINISHING---")
         return "max_retries_exceeded"
 
+    if not documents:
+        print("---NO DOCUMENTS: FINISHING DIRECTLY WITHOUT HALLUCINATION CHECK---")
+        return "useful"
+
     docs_text = "\n\n".join([d.page_content for d in documents])
 
     try:

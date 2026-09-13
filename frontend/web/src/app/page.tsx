@@ -215,6 +215,8 @@ export default function Home() {
             loading={loading}
             onSend={handleSend}
             activeSessionTitle={activeSessionTitle}
+            documentCount={documents.length}
+            onNavigateToDocuments={() => setActiveTab("documents")}
           />
         )}
 

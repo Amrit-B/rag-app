@@ -62,7 +62,7 @@ export default function ObservabilityView() {
             </div>
 
             <a
-              href="http://localhost:3001"
+              href="/grafana/"
               target="_blank"
               rel="noreferrer"
               className="flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-medium text-white shadow-sm transition-colors"

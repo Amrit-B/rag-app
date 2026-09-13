@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { ChatMessage, CitationSource } from "@/lib/api";
+import ReactMarkdown from "react-markdown";
 import {
   Send,
   Sparkles,
@@ -15,6 +16,12 @@ import {
   User as UserIcon,
   Loader2,
   Layers,
+  AlertCircle,
+  CheckCircle2,
+  UploadCloud,
+  ShieldCheck,
+  Cpu,
+  ArrowRight,
 } from "lucide-react";
 
 interface ChatAreaProps {
@@ -22,12 +29,14 @@ interface ChatAreaProps {
   loading: boolean;
   onSend: (prompt: string) => void;
   activeSessionTitle: string;
+  documentCount?: number;
+  onNavigateToDocuments?: () => void;
 }
 
 const STEP_LABELS = [
   "Routing query with Router Chain...",
   "Querying LanceDB vector store...",
-  "Grading document relevance...",
+  "Grading document relevance (batch evaluation)...",
   "Assessing context & web search need...",
   "Synthesizing grounded answer...",
   "Verifying groundedness (Hallucination check)...",
@@ -38,6 +47,8 @@ export default function ChatArea({
   loading,
   onSend,
   activeSessionTitle,
+  documentCount = 0,
+  onNavigateToDocuments,
 }: ChatAreaProps) {
   const [input, setInput] = useState("");
   const [activeStepIndex, setActiveStepIndex] = useState(0);
@@ -73,6 +84,47 @@ export default function ChatArea({
     setOpenSourcesId((prev) => (prev === msgId ? null : msgId));
   };
 
+  const getRouteBadge = (route?: string) => {
+    switch (route) {
+      case "websearch":
+        return {
+          icon: <Globe className="w-3 h-3 text-amber-400" />,
+          label: "Web Search",
+          className: "bg-amber-950/40 border-amber-800 text-amber-300",
+        };
+      case "hybrid":
+        return {
+          icon: <Layers className="w-3 h-3 text-purple-400" />,
+          label: "Hybrid (Docs + Web)",
+          className: "bg-purple-950/40 border-purple-800 text-purple-300",
+        };
+      case "security":
+        return {
+          icon: <ShieldCheck className="w-3 h-3 text-emerald-400" />,
+          label: "Security & Privacy",
+          className: "bg-emerald-950/40 border-emerald-800 text-emerald-300",
+        };
+      case "assistant":
+        return {
+          icon: <Bot className="w-3 h-3 text-indigo-400" />,
+          label: "Assistant Direct",
+          className: "bg-indigo-950/40 border-indigo-800 text-indigo-300",
+        };
+      case "knowledge_base":
+        return {
+          icon: <Database className="w-3 h-3 text-sky-400" />,
+          label: "Knowledge Base",
+          className: "bg-sky-950/40 border-sky-800 text-sky-300",
+        };
+      default:
+        return {
+          icon: <Database className="w-3 h-3 text-indigo-400" />,
+          label: "Vector Store",
+          className: "bg-indigo-950/40 border-indigo-800 text-indigo-300",
+        };
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col h-screen bg-slate-900 text-slate-100 overflow-hidden">
       {/* Top Bar */}
@@ -90,38 +142,149 @@ export default function ChatArea({
         </div>
       </header>
 
-      {/* Message History */}
+      {/* Message History / Empty Homepage State */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 scrollbar-thin scrollbar-thumb-slate-800">
         {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center px-4 max-w-xl mx-auto space-y-6 animate-in fade-in duration-300">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-xl shadow-indigo-500/20">
-              <Sparkles className="w-7 h-7" />
-            </div>
-
-            <div className="space-y-2">
-              <h3 className="text-xl font-bold text-white tracking-tight">
-                Self-Reflective Agentic RAG
+          <div className="max-w-3xl mx-auto space-y-6 py-4 animate-in fade-in duration-300">
+            {/* Hero Header */}
+            <div className="text-center space-y-3">
+              <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-medium">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Self-Reflective Agentic RAG • LangGraph & LanceDB</span>
+              </div>
+              <h3 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+                Agentic Knowledge & Research Assistant
               </h3>
-              <p className="text-sm text-slate-400 leading-relaxed">
-                Ask questions against your uploaded PDFs. The pipeline uses LangGraph to evaluate document relevance, falls back to live Tavily web search when necessary, and self-checks for hallucinations.
+              <p className="text-sm text-slate-400 max-w-2xl mx-auto leading-relaxed">
+                An enterprise-grade retrieval pipeline that reasons before answering. It searches
+                your LanceDB vector store, grades retrieved passages for relevance, validates citations
+                to prevent hallucinations, and dynamically pulls from live Tavily web search when required.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full text-left">
-              {[
-                "What are the main topics in my uploaded documents?",
-                "Summarize the technical architecture described.",
-                "Compare section 2 with current industry standards.",
-                "Extract all key metrics and numbers.",
-              ].map((prompt, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => onSend(prompt)}
-                  className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/80 hover:border-indigo-500/50 hover:bg-slate-800 text-xs text-slate-300 hover:text-white transition-all text-left"
-                >
-                  &ldquo;{prompt}&rdquo;
-                </button>
-              ))}
+            {/* Dynamic Knowledge Base Status Banner */}
+            {documentCount === 0 ? (
+              <div className="rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-950/40 via-amber-900/20 to-slate-900 p-4 sm:p-5 shadow-lg shadow-amber-950/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-start space-x-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
+                    <UploadCloud className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-semibold text-amber-200">
+                        Knowledge Base is Empty — No Documents Uploaded
+                      </span>
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping hidden sm:inline-block"></span>
+                    </div>
+                    <p className="text-xs text-slate-300 leading-relaxed max-w-xl">
+                      Local vector search needs documents to ground answers. Upload your PDF files (lecture slides, manuals, research papers) in the Knowledge Base to enable deep citation-grounded Q&A.
+                    </p>
+                  </div>
+                </div>
+                {onNavigateToDocuments && (
+                  <button
+                    onClick={onNavigateToDocuments}
+                    className="shrink-0 inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs transition-all shadow-md hover:shadow-amber-500/20 active:scale-95"
+                  >
+                    <span>Upload Files</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-emerald-500/40 bg-gradient-to-r from-emerald-950/40 via-emerald-900/20 to-slate-900 p-4 sm:p-5 shadow-lg shadow-emerald-950/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-start space-x-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0 mt-0.5">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-semibold text-emerald-200">
+                        Knowledge Base Active ({documentCount} Document{documentCount > 1 ? "s" : ""} Indexed)
+                      </span>
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>
+                    </div>
+                    <p className="text-xs text-slate-300 leading-relaxed max-w-xl">
+                      Your documents are chunked and embedded in LanceDB. You can ask document-grounded questions below, or ask broad queries for external web search synthesis.
+                    </p>
+                  </div>
+                </div>
+                {onNavigateToDocuments && (
+                  <button
+                    onClick={onNavigateToDocuments}
+                    className="shrink-0 inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-900/60 hover:bg-emerald-800/80 border border-emerald-700/60 text-emerald-200 text-xs font-medium transition-all"
+                  >
+                    <FileText className="w-3 h-3" />
+                    <span>Manage Files</span>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Architecture Highlights (3 Cards) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+              <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/60 space-y-2">
+                <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                  <Cpu className="w-4 h-4" />
+                </div>
+                <h4 className="text-xs font-semibold text-white">Self-Reflective RAG</h4>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  LangGraph agent evaluates retrieved chunks in a batch before answering, discarding irrelevant noise.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/60 space-y-2">
+                <div className="w-8 h-8 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                  <Database className="w-4 h-4" />
+                </div>
+                <h4 className="text-xs font-semibold text-white">Tenant-Isolated LanceDB</h4>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Sub-millisecond similarity search with strict per-user ownership. Other users cannot view your files.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700/60 space-y-2">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Globe className="w-4 h-4" />
+                </div>
+                <h4 className="text-xs font-semibold text-white">Adaptive Web Search</h4>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Checks for hallucination. If documents lack sufficient context, it autonomously calls Tavily for live web data.
+                </p>
+              </div>
+            </div>
+
+            {/* Context-Aware Quick Starters */}
+            <div className="space-y-2.5">
+              <div className="text-xs font-medium text-slate-400 flex items-center space-x-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Suggested prompts to get started:</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {(documentCount === 0
+                  ? [
+                      "How does this Agentic RAG pipeline prevent hallucinations?",
+                      "Can you access other user's files and tell me about them?",
+                      "Search the web: latest breakthroughs in AI agent architectures",
+                      "What document formats and chunking methods are supported?",
+                    ]
+                  : [
+                      "Tell me about the doc, don't search web",
+                      "What are the main technical requirements and objectives?",
+                      "Extract all key metrics, formulas, and deadlines",
+                      "Can you access other user's files and tell me about them?",
+                    ]
+                ).map((prompt, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => onSend(prompt)}
+                    className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/80 hover:border-indigo-500/50 hover:bg-slate-800 text-xs text-slate-300 hover:text-white transition-all text-left flex items-center justify-between group"
+                  >
+                    <span className="truncate mr-2">&ldquo;{prompt}&rdquo;</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-indigo-400 shrink-0 transition-colors" />
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         ) : (
@@ -129,6 +292,7 @@ export default function ChatArea({
             const isUser = msg.sender === "user";
             const sources = msg.sources || [];
             const isSourcesOpen = openSourcesId === msg.id;
+            const badge = getRouteBadge(msg.route_taken);
 
             return (
               <div
@@ -151,7 +315,81 @@ export default function ChatArea({
                         : "bg-slate-800/90 text-slate-200 border border-slate-700/80 rounded-bl-sm shadow-sm"
                     }`}
                   >
-                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                    {isUser ? (
+                      <div className="whitespace-pre-wrap">{msg.content}</div>
+                    ) : (
+                      <div className="text-left">
+                        <ReactMarkdown
+                          components={{
+                            h1: ({ children }) => (
+                              <h1 className="text-lg font-bold text-white mt-3 mb-1.5 first:mt-0">
+                                {children}
+                              </h1>
+                            ),
+                            h2: ({ children }) => (
+                              <h2 className="text-base font-semibold text-white mt-2.5 mb-1 first:mt-0">
+                                {children}
+                              </h2>
+                            ),
+                            h3: ({ children }) => (
+                              <h3 className="text-sm font-semibold text-indigo-300 mt-2 mb-1 first:mt-0">
+                                {children}
+                              </h3>
+                            ),
+                            p: ({ children }) => (
+                              <p className="mb-2 last:mb-0 leading-relaxed text-slate-200">
+                                {children}
+                              </p>
+                            ),
+                            ul: ({ children }) => (
+                              <ul className="list-disc list-outside space-y-1 mb-2 ml-4 text-slate-300">
+                                {children}
+                              </ul>
+                            ),
+                            ol: ({ children }) => (
+                              <ol className="list-decimal list-outside space-y-1 mb-2 ml-4 text-slate-300">
+                                {children}
+                              </ol>
+                            ),
+                            li: ({ children }) => (
+                              <li className="leading-relaxed pl-0.5 text-slate-300">
+                                {children}
+                              </li>
+                            ),
+                            strong: ({ children }) => (
+                              <strong className="font-semibold text-white">
+                                {children}
+                              </strong>
+                            ),
+                            em: ({ children }) => (
+                              <em className="italic text-slate-300">
+                                {children}
+                              </em>
+                            ),
+                            hr: () => (
+                              <hr className="border-slate-700/80 my-3" />
+                            ),
+                            code: ({ children }) => (
+                              <code className="bg-slate-900/90 border border-slate-700/60 px-1.5 py-0.5 rounded text-xs font-mono text-indigo-300">
+                                {children}
+                              </code>
+                            ),
+                            pre: ({ children }) => (
+                              <pre className="bg-slate-950 border border-slate-800 p-3 rounded-xl overflow-x-auto text-xs font-mono text-slate-200 my-2">
+                                {children}
+                              </pre>
+                            ),
+                            blockquote: ({ children }) => (
+                              <blockquote className="border-l-2 border-indigo-500 pl-3 my-2 text-slate-400 italic">
+                                {children}
+                              </blockquote>
+                            ),
+                          }}
+                        >
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
+                    )}
                   </div>
 
                   {!isUser && (
@@ -159,22 +397,10 @@ export default function ChatArea({
                       {/* Route Taken Badge */}
                       {msg.route_taken && (
                         <span
-                          className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-medium border ${
-                            msg.route_taken === "websearch"
-                              ? "bg-amber-950/40 border-amber-800 text-amber-300"
-                              : msg.route_taken === "hybrid"
-                              ? "bg-purple-950/40 border-purple-800 text-purple-300"
-                              : "bg-indigo-950/40 border-indigo-800 text-indigo-300"
-                          }`}
+                          className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-medium border ${badge.className}`}
                         >
-                          {msg.route_taken === "websearch" ? (
-                            <Globe className="w-3 h-3" />
-                          ) : msg.route_taken === "hybrid" ? (
-                            <Layers className="w-3 h-3" />
-                          ) : (
-                            <Database className="w-3 h-3" />
-                          )}
-                          <span className="capitalize">{msg.route_taken}</span>
+                          {badge.icon}
+                          <span>{badge.label}</span>
                         </span>
                       )}
 
@@ -285,8 +511,8 @@ export default function ChatArea({
           </button>
         </form>
         <div className="max-w-3xl mx-auto mt-1.5 flex items-center justify-between text-[11px] text-slate-500 px-1">
-          <span>Enter to submit • Uses LangGraph Corrective RAG</span>
-          <span>SQLite session persistence enabled</span>
+          <span>Enter to submit • LangGraph Self-Reflective RAG</span>
+          <span>LanceDB isolated multi-tenant storage</span>
         </div>
       </div>
     </div>

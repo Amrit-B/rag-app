@@ -11,6 +11,14 @@ class GradeDocuments(BaseModel):
     )
 
 
+class BatchGradeDocuments(BaseModel):
+    """Batch relevance evaluation for retrieved document chunks."""
+    relevant_indices: list[int] = Field(
+        default_factory=list,
+        description="0-indexed list of integers corresponding to document chunks that are relevant to the user question.",
+    )
+
+
 def get_retrieval_grader():
     llm = get_retrieval_grader_llm()
     structured_llm_grader = llm.with_structured_output(GradeDocuments)
@@ -30,4 +38,26 @@ def get_retrieval_grader():
     return grade_prompt | structured_llm_grader
 
 
+def get_batch_retrieval_grader():
+    llm = get_retrieval_grader_llm()
+    structured_llm_grader = llm.with_structured_output(BatchGradeDocuments)
+
+    system = (
+        "You are an expert evaluator assessing the relevance of candidate document chunks to a user question.\n"
+        "You will be given numbered document chunks: [Chunk 0], [Chunk 1], etc.\n"
+        "For each chunk, determine if it contains keywords, concepts, or semantic meaning related to the user question.\n"
+        "It does not need to be a stringent test; filter out only completely off-topic or irrelevant chunks.\n"
+        "Return the 0-indexed list of indices (relevant_indices) for chunks that are relevant to answering the question."
+    )
+    batch_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", system),
+            ("human", "User question: {question}\n\nCandidate Document Chunks:\n{documents}"),
+        ]
+    )
+    return batch_prompt | structured_llm_grader
+
+
 retrieval_grader = get_retrieval_grader()
+batch_retrieval_grader = get_batch_retrieval_grader()
+
