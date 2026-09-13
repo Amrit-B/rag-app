@@ -1,10 +1,9 @@
 from pathlib import Path
 import os
-import sys
 from dotenv import load_dotenv
 
-# Automatically load environment variables from project root .env, overriding terminal vars
-load_dotenv(Path(__file__).parents[1] / ".env", override=True)
+# Load environment variables from project root .env
+load_dotenv(Path(__file__).parents[1] / ".env")
 
 AUTH_DB_PATH = Path(__file__).parents[1] / "data" / "auth.db"
 

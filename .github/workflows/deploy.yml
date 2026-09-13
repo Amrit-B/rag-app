@@ -2,7 +2,7 @@ name: CI/CD
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "Agentic-Rag" ]
     paths-ignore:
       - "README.md"
       - "DEPLOYMENT.md"
@@ -35,9 +35,11 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            ambro333/rag-api:latest
-            ambro333/rag-app:latest
+            ${{ secrets.DOCKER_USERNAME }}/rag-api:latest
+            ${{ secrets.DOCKER_USERNAME }}/rag-app:latest
           platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build and push Frontend Next.js image
         uses: docker/build-push-action@v5
@@ -45,13 +47,28 @@ jobs:
           context: ./frontend/web
           file: ./frontend/web/Dockerfile
           push: true
-          tags: ambro333/rag-frontend:latest
+          tags: ${{ secrets.DOCKER_USERNAME }}/rag-frontend:latest
           platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copy docker-compose and monitoring to VM
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          port: ${{ secrets.VM_SSH_PORT }}
+          source: "docker-compose.yml,monitoring/**"
+          target: ${{ secrets.VM_APP_PATH }}
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -63,27 +80,26 @@ jobs:
             set -e
             cd ${{ secrets.VM_APP_PATH }}
             
-            sudo fuser -k 8000/tcp || true
-            sudo fuser -k 8501/tcp || true
-            sudo fuser -k 3000/tcp || true
-            
             if command -v podman >/dev/null 2>&1; then
-              sudo podman system prune -a --force 2>&1 || true
-              sudo podman pull docker.io/ambro333/rag-api:latest
-              sudo podman pull docker.io/ambro333/rag-frontend:latest
-              sudo /usr/local/bin/podman-compose pull || true
               sudo /usr/local/bin/podman-compose down || true
+              sudo podman system prune -a --force 2>&1 || true
+              sudo podman pull docker.io/${{ secrets.DOCKER_USERNAME }}/rag-api:latest
+              sudo podman pull docker.io/${{ secrets.DOCKER_USERNAME }}/rag-frontend:latest
+              sudo /usr/local/bin/podman-compose pull || true
               sudo /usr/local/bin/podman-compose up -d --remove-orphans
             elif command -v docker >/dev/null 2>&1; then
-              docker system prune -a --force 2>&1 || true
-              docker pull ambro333/rag-api:latest
-              docker pull ambro333/rag-frontend:latest
               if docker compose version >/dev/null 2>&1; then
                 docker compose down || true
+                docker system prune -a --force 2>&1 || true
+                docker pull ${{ secrets.DOCKER_USERNAME }}/rag-api:latest
+                docker pull ${{ secrets.DOCKER_USERNAME }}/rag-frontend:latest
                 docker compose pull || true
                 docker compose up -d --remove-orphans
               else
                 docker-compose down || true
+                docker system prune -a --force 2>&1 || true
+                docker pull ${{ secrets.DOCKER_USERNAME }}/rag-api:latest
+                docker pull ${{ secrets.DOCKER_USERNAME }}/rag-frontend:latest
                 docker-compose pull || true
                 docker-compose up -d --remove-orphans
               fi

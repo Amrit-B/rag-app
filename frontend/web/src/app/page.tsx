@@ -18,6 +18,7 @@ import {
   sendQuery,
   fetchDocuments,
   getStoredUsername,
+  getStoredIsAdmin,
   clearAuthToken,
 } from "@/lib/api";
 
@@ -30,12 +31,14 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Initialize Auth state
   useEffect(() => {
     const user = getStoredUsername();
     if (user) {
       setUsername(user);
+      setIsAdmin(getStoredIsAdmin());
     }
   }, []);
 
@@ -174,10 +177,14 @@ export default function Home() {
   const handleLogout = () => {
     clearAuthToken();
     setUsername(null);
+    setIsAdmin(false);
     setSessions([]);
     setActiveSessionId(null);
     setMessages([]);
     setDocuments([]);
+    if (activeTab === "observability") {
+      setActiveTab("chat");
+    }
   };
 
   const activeSessionTitle =
@@ -195,6 +202,7 @@ export default function Home() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         username={username}
+        isAdmin={isAdmin}
         onOpenAuth={() => setAuthModalOpen(true)}
         onLogout={handleLogout}
       />
@@ -228,8 +236,9 @@ export default function Home() {
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
-        onSuccess={(user) => {
+        onSuccess={(user, admin) => {
           setUsername(user);
+          setIsAdmin(Boolean(admin));
         }}
       />
     </div>

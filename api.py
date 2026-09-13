@@ -1,5 +1,5 @@
 from dotenv import load_dotenv
-load_dotenv(override=True)
+load_dotenv()
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,6 +31,7 @@ from backend.data_models import (
     Prompt,
     RegisterModel,
     LoginModel,
+    LoginResponse,
     RAGQueryResponse,
     CitationSource,
     ChatSessionCreate,
@@ -98,13 +99,22 @@ async def register_user(payload: RegisterModel):
     return {"status": "success", "user": user}
 
 
-@app.post("/auth/login")
+@app.post("/auth/login", response_model=LoginResponse)
 async def login(payload: LoginModel):
     user = authenticate_user(payload.username, payload.password)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    token = create_access_token({"id": user["id"], "username": user["username"]})
-    return {"access_token": token, "username": user["username"], "user_id": str(user["id"])}
+    token = create_access_token({
+        "id": user["id"],
+        "username": user["username"],
+        "is_admin": user.get("is_admin", False),
+    })
+    return {
+        "access_token": token,
+        "username": user["username"],
+        "user_id": str(user["id"]),
+        "is_admin": user.get("is_admin", False),
+    }
 
 
 @app.get("/auth/me")
@@ -363,6 +373,8 @@ async def reset_database(current_user: dict = Depends(get_current_user)):
 
 @app.post("/admin/evaluate")
 async def trigger_evaluation(current_user: dict = Depends(get_current_user)):
+    if not current_user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin privileges required to trigger evaluation benchmarks")
     try:
         from backend.evaluation import run_evaluation
         report = await asyncio.to_thread(run_evaluation, user_id=str(current_user["id"]))

@@ -1,6 +1,7 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import json
+import os
 from uuid import uuid4
 
 from sqlalchemy import (
@@ -10,6 +11,7 @@ from sqlalchemy import (
     String,
     Text,
     DateTime,
+    Boolean,
     ForeignKey,
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
@@ -27,7 +29,8 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    is_admin = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     documents = relationship("DocumentRecord", back_populates="user", cascade="all, delete-orphan")
     chat_sessions = relationship("ChatSession", back_populates="user", cascade="all, delete-orphan")
@@ -45,7 +48,7 @@ class DocumentRecord(Base):
     chunk_count = Column(Integer, default=0)
     status = Column(String, default="completed")  # queued, processing, completed, failed
     error_message = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     user = relationship("User", back_populates="documents")
@@ -57,8 +60,8 @@ class ChatSession(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     user_id = Column(String, index=True, nullable=False)
     title = Column(String, default="New Conversation")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     user_rel_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     user = relationship("User", back_populates="chat_sessions")
@@ -74,7 +77,7 @@ class ChatMessage(Base):
     content = Column(Text, nullable=False)
     sources_json = Column(Text, default="[]")  # JSON string of sources
     route_taken = Column(String, nullable=True)  # 'vectorstore', 'websearch', 'hybrid'
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     session = relationship("ChatSession", back_populates="messages")
 
@@ -82,6 +85,39 @@ class ChatMessage(Base):
 def init_db():
     AUTH_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
+
+    # Automatic SQLite migration: ensure is_admin column exists
+    with engine.connect() as conn:
+        try:
+            from sqlalchemy import text
+            cursor = conn.execute(text("PRAGMA table_info(users)"))
+            columns = [row[1] for row in cursor.fetchall()]
+            if "is_admin" not in columns:
+                conn.execute(text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT 0"))
+                conn.commit()
+        except Exception as e:
+            print(f"Migration notice: {e}")
+
+    # Seed admin user if configured via environment variables
+    admin_user_name = os.getenv("ADMIN_USERNAME")
+    admin_pass = os.getenv("ADMIN_PASSWORD")
+    if admin_user_name and admin_pass:
+        db = SessionLocal()
+        try:
+            from passlib.hash import pbkdf2_sha256
+            existing = db.query(User).filter(User.username == admin_user_name.strip()).first()
+            if existing:
+                existing.is_admin = True
+            else:
+                hashed = pbkdf2_sha256.hash(admin_pass)
+                new_admin = User(username=admin_user_name.strip(), password_hash=hashed, is_admin=True)
+                db.add(new_admin)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            print(f"Warning seeding admin user: {e}")
+        finally:
+            db.close()
 
 
 def get_db():
@@ -310,7 +346,7 @@ def db_add_chat_message(
         )
         db.add(msg)
         # pyrefly: ignore [bad-assignment]
-        session.updated_at = datetime.utcnow()
+        session.updated_at = datetime.now(timezone.utc)
 
         # If it's the first user message, update title from content
         if sender == "user" and session.title == "New Conversation":

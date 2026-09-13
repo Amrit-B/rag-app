@@ -5,47 +5,68 @@ build/
 dist/
 wheels/
 *.egg-info
+.pytest_cache/
+.coverage
+htmlcov/
 
 # Virtual environments
-.venv
+.venv/
+venv/
+ENV/
+env/
+
+# Environment and secrets
 .env
-
-# User data and databases
-data/
-knowledge_base/
-auth.db
-*.db
-
-# Private/debug scripts
-check_users.py
-scp
-nginx_access.log
-
-
-# Deployment artifacts
-deploy.zip
-deploy.sh
-/deploy.yml
-*.log
-/backup_nginx
-/backup_rag_app
-
-# SSH keys
+.env.*
+!.env.example
 *.key
 *.pem
 
-# OS files
+# User data, vectors, and databases
+data/
+knowledge_base/
+lancedb/
+*.db
+*.sqlite
+*.sqlite3
+auth.db
+rag.db
+
+# Logs and debug files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+nginx_access.log
+
+# Private debug/deployment scripts & artifacts
+check_users.py
+analyze_logs.py
+scp
+deploy.zip
+deploy.sh
+/deploy.yml
+/backup_nginx/
+/backup_rag_app/
+
+# OS and temporary files
 .DS_Store
 Thumbs.db
+*.tmp
+*.bak
+*.swp
+*.swo
 
-# IDE
+# IDE & Editor files
 .vscode/
-.idea/*.bak
-
-analyze_logs.py
+.idea/
 
 # Node & Next.js
 node_modules/
 .next/
+.turbo/
 frontend/web/node_modules/
-frontend/web/.next/
+frontend/web/.next/
+frontend/web/build/
+frontend/web/.turbo/

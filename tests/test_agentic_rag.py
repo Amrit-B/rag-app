@@ -121,10 +121,54 @@ def test_fastapi_endpoints():
     assert b"rag_queries_total" in res_metrics.content or b"process_virtual_memory_bytes" in res_metrics.content
 
 
+def test_auth_and_admin_validation():
+    init_db()
+    client = TestClient(fastapi_app)
+
+    # 1. Test registration with username < 3 chars -> rejected
+    import uuid
+    dummy_pass = f"p_{uuid.uuid4().hex[:12]}"
+    res = client.post("/auth/register", json={"username": "ab", "password": dummy_pass})
+    assert res.status_code in [400, 422]
+
+    # 2. Test registration with password < 6 chars -> rejected
+    res = client.post("/auth/register", json={"username": "validuser", "password": "12"})
+    assert res.status_code in [400, 422]
+
+    # 3. Successful registration with valid credentials
+    test_user = f"user_{uuid.uuid4().hex[:8]}"
+    test_pass = f"pass_{uuid.uuid4().hex[:12]}"
+    res = client.post("/auth/register", json={"username": test_user, "password": test_pass})
+    assert res.status_code == 200
+    assert res.json()["status"] == "success"
+
+    # 4. Login as regular user -> is_admin is False
+    res_login = client.post("/auth/login", json={"username": test_user, "password": test_pass})
+    assert res_login.status_code == 200
+    login_data = res_login.json()
+    assert login_data["is_admin"] is False
+    token = login_data["access_token"]
+
+    # 5. Regular user accessing /admin/evaluate -> 403 Forbidden
+    res_eval = client.post("/admin/evaluate", headers={"Authorization": f"Bearer {token}"})
+    assert res_eval.status_code == 403
+
+    # 6. Admin user creation and verification
+    from backend.auth import create_user
+    admin_uname = f"adm_{uuid.uuid4().hex[:8]}"
+    admin_pwd = f"pass_{uuid.uuid4().hex[:12]}"
+    create_user(admin_uname, admin_pwd, is_admin=True)
+    res_admin = client.post("/auth/login", json={"username": admin_uname, "password": admin_pwd})
+    assert res_admin.status_code == 200
+    assert res_admin.json()["is_admin"] is True
+
+
 if __name__ == "__main__":
     print("Running integration tests...")
     test_database_and_metadata()
     print("[PASS] test_database_and_metadata passed")
+    test_auth_and_admin_validation()
+    print("[PASS] test_auth_and_admin_validation passed")
     test_text_cleaner()
     print("[PASS] test_text_cleaner passed")
     test_technical_splitter()

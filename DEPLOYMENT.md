@@ -52,8 +52,8 @@ docker compose up -d --build
 
 - Web Application: http://localhost:3000 (or http://localhost:8501)
 - Backend Docs: http://localhost:8000/docs
-- Prometheus: http://localhost:9090
-- Grafana: http://localhost:3001 (User: `admin`, Pass: `admin`)
+- Prometheus: http://localhost:9090 (Admin/Localhost only)
+- Grafana: http://localhost:3001 (Admin/Localhost only)
 
 ---
 

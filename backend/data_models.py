@@ -20,13 +20,26 @@ class ChunkArticle(LanceModel):
 
 # Auth Models
 class RegisterModel(BaseModel):
-    username: str
-    password: str
+    username: str = Field(..., min_length=3, description="Username must be at least 3 characters")
+    password: str = Field(..., min_length=6, description="Password must be at least 6 characters")
 
 
 class LoginModel(BaseModel):
+    username: str = Field(..., min_length=1)
+    password: str = Field(..., min_length=1)
+
+
+class AuthUserResponse(BaseModel):
+    id: int
     username: str
-    password: str
+    is_admin: bool = False
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    username: str
+    user_id: str
+    is_admin: bool = False
 
 
 # Query & Chat Models

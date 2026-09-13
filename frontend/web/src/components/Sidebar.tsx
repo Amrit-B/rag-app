@@ -24,6 +24,7 @@ interface SidebarProps {
   activeTab: "chat" | "documents" | "observability" | "about";
   onTabChange: (tab: "chat" | "documents" | "observability" | "about") => void;
   username: string | null;
+  isAdmin?: boolean;
   onOpenAuth: () => void;
   onLogout: () => void;
 }
@@ -37,6 +38,7 @@ export default function Sidebar({
   activeTab,
   onTabChange,
   username,
+  isAdmin = false,
   onOpenAuth,
   onLogout,
 }: SidebarProps) {
@@ -86,17 +88,19 @@ export default function Sidebar({
           <span>Knowledge Base</span>
         </button>
 
-        <button
-          onClick={() => onTabChange("observability")}
-          className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-            activeTab === "observability"
-              ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/30"
-              : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
-          }`}
-        >
-          <Activity className="w-4 h-4" />
-          <span>Observability & Stats</span>
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => onTabChange("observability")}
+            className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+              activeTab === "observability"
+                ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/30"
+                : "text-slate-400 hover:text-slate-200 hover:bg-slate-900"
+            }`}
+          >
+            <Activity className="w-4 h-4" />
+            <span>Observability & Stats</span>
+          </button>
+        )}
 
         <button
           onClick={() => onTabChange("about")}
@@ -167,20 +171,22 @@ export default function Sidebar({
       </div>
 
       {/* Observability Quick Link */}
-      <div className="px-3 py-2 border-t border-slate-800/60 bg-slate-950">
-        <a
-          href="http://localhost:3001"
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-indigo-950/30 border border-indigo-900/50 text-[11px] text-indigo-300 hover:bg-indigo-900/40 transition-colors"
-        >
-          <span className="flex items-center space-x-1.5">
-            <Activity className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Grafana Dashboard</span>
-          </span>
-          <ExternalLink className="w-3 h-3 text-indigo-400" />
-        </a>
-      </div>
+      {isAdmin && (
+        <div className="px-3 py-2 border-t border-slate-800/60 bg-slate-950">
+          <a
+            href="http://localhost:3001"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-indigo-950/30 border border-indigo-900/50 text-[11px] text-indigo-300 hover:bg-indigo-900/40 transition-colors"
+          >
+            <span className="flex items-center space-x-1.5">
+              <Activity className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Grafana Dashboard</span>
+            </span>
+            <ExternalLink className="w-3 h-3 text-indigo-400" />
+          </a>
+        </div>
+      )}
 
       {/* User Footer Section */}
       <div className="p-3 border-t border-slate-800/80 bg-slate-900/40">

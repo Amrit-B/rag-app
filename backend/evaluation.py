@@ -84,11 +84,11 @@ def run_evaluation(
     try:
         from ragas.llms import LangchainLLMWrapper
         from ragas.embeddings import LangchainEmbeddingsWrapper
-        from langchain_community.embeddings import HuggingFaceEmbeddings
+        from langchain_community.embeddings.sentence_transformer import SentenceTransformerEmbeddings
 
         evaluator_llm = LangchainLLMWrapper(get_evaluator_llm())
         evaluator_embeddings = LangchainEmbeddingsWrapper(
-            HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+            SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
         )
 
         results = evaluate(

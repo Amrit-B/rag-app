@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 export interface CitationSource {
   source: string;
@@ -48,21 +48,28 @@ export function getAuthToken(): string | null {
   return localStorage.getItem("rag_token");
 }
 
-export function setAuthToken(token: string, username: string): void {
+export function setAuthToken(token: string, username: string, isAdmin = false): void {
   if (typeof window === "undefined") return;
   localStorage.setItem("rag_token", token);
   localStorage.setItem("rag_username", username);
+  localStorage.setItem("rag_is_admin", isAdmin ? "true" : "false");
 }
 
 export function clearAuthToken(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem("rag_token");
   localStorage.removeItem("rag_username");
+  localStorage.removeItem("rag_is_admin");
 }
 
 export function getStoredUsername(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("rag_username");
+}
+
+export function getStoredIsAdmin(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem("rag_is_admin") === "true";
 }
 
 function getHeaders(extra: HeadersInit = {}): HeadersInit {

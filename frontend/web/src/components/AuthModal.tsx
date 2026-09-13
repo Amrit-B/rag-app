@@ -7,7 +7,7 @@ import { LogIn, UserPlus, X, AlertCircle } from "lucide-react";
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (username: string) => void;
+  onSuccess: (username: string, isAdmin?: boolean) => void;
 }
 
 export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
@@ -22,20 +22,33 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    const cleanUsername = username.trim();
+    if (!isLogin) {
+      if (cleanUsername.length < 3) {
+        setError("Username must be at least 3 characters long");
+        return;
+      }
+      if (password.length < 6) {
+        setError("Password must be at least 6 characters long");
+        return;
+      }
+    }
+
     setLoading(true);
 
     try {
       if (isLogin) {
-        const data = await loginUser(username, password);
-        setAuthToken(data.access_token, data.username);
-        onSuccess(data.username);
+        const data = await loginUser(cleanUsername, password);
+        setAuthToken(data.access_token, data.username, Boolean(data.is_admin));
+        onSuccess(data.username, Boolean(data.is_admin));
         onClose();
       } else {
-        await registerUser(username, password);
+        await registerUser(cleanUsername, password);
         // Auto-login after registration
-        const data = await loginUser(username, password);
-        setAuthToken(data.access_token, data.username);
-        onSuccess(data.username);
+        const data = await loginUser(cleanUsername, password);
+        setAuthToken(data.access_token, data.username, Boolean(data.is_admin));
+        onSuccess(data.username, Boolean(data.is_admin));
         onClose();
       }
     } catch (err: any) {
@@ -80,10 +93,11 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
             <input
               type="text"
               required
+              minLength={isLogin ? 1 : 3}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              placeholder="Enter username"
+              placeholder={isLogin ? "Enter username" : "At least 3 characters"}
             />
           </div>
 
@@ -92,11 +106,17 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
             <input
               type="password"
               required
+              minLength={isLogin ? 1 : 6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              placeholder="Enter password"
+              placeholder={isLogin ? "Enter password" : "At least 6 characters"}
             />
+            {!isLogin && (
+              <p className="text-[11px] text-slate-400 mt-1.5">
+                Username must be ≥ 3 chars, password ≥ 6 chars.
+              </p>
+            )}
           </div>
 
           <button
