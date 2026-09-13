@@ -38,6 +38,13 @@ Based on the self-reflective agentic RAG pattern ([emarco177/langgraph-course](h
 - **Grafana Dashboards**: Visualizes system performance, vector retrieval times, and LLM throughput.
 - **CI/CD Automation**: GitHub Actions pipeline building Docker containers and deploying directly to production.
 
+### 6. Model Context Protocol (MCP) Integration
+- **Prometheus MCP (`mcp-prometheus`)**: Real-time PromQL querying, resource bottleneck diagnosis, and metric inspection for AI agents.
+- **SQLite MCP (`mcp-server-sqlite`)**: Direct database schema inspection and metadata querying for `auth.db`.
+- **Docker MCP (`mcp-server-docker`)**: Automated container lifecycle management and logs inspection.
+- **Tavily MCP (`@agtools/mcp-tavily`)**: Standardized web search tool invocation conforming to the Model Context Protocol.
+- **LangChain MCP (`docs-langchain`, `reference-langchain`)**: Embedded documentation and API symbol lookups for agent development.
+
 ---
 
 ## Tech Stack
@@ -51,6 +58,7 @@ Based on the self-reflective agentic RAG pattern ([emarco177/langgraph-course](h
 | **Vector Store** | LanceDB (Embedded Apache Arrow) |
 | **Relational DB** | SQLite (SQLAlchemy 2.0) |
 | **Web Search** | Tavily Search API |
+| **Agent Protocol** | Model Context Protocol (MCP) (Prometheus, SQLite, Docker, Tavily, LangChain Docs) |
 | **Evaluation** | Ragas (Context Precision, Faithfulness, Answer Relevance), HuggingFace Datasets |
 | **Monitoring** | Prometheus, Grafana |
 | **DevOps** | Docker, Docker Compose, Nginx SSL, GitHub Actions CI/CD |
@@ -120,6 +128,40 @@ python -u tests/test_agentic_rag.py
 python -m backend.evaluation --output reports/evaluation_results.json
 ```
 Benchmark scores (Context Precision, Faithfulness, Answer Relevance) are also accessible directly in the Web UI under the **Observability & Stats** tab.
+
+---
+
+## Model Context Protocol (MCP) Configuration
+
+This platform integrates with the open **Model Context Protocol (MCP)** standard, enabling autonomous agents and AI development environments to inspect, query, and operate the entire system stack:
+
+```json
+{
+  "mcpServers": {
+    "prometheus": {
+      "command": "npx",
+      "args": ["-y", "mcp-prometheus@latest"],
+      "env": { "PROMETHEUS_URL": "http://localhost:9090" }
+    },
+    "sqlite": {
+      "command": "uvx",
+      "args": ["mcp-server-sqlite", "--db-path", "./data/auth.db"]
+    },
+    "docker": {
+      "command": "uvx",
+      "args": ["mcp-server-docker"]
+    },
+    "tavily": {
+      "command": "npx",
+      "args": ["-y", "@agtools/mcp-tavily"],
+      "env": { "TAVILY_API_KEY": "your_tavily_api_key" }
+    },
+    "docs-langchain": {
+      "serverUrl": "https://docs.langchain.com/mcp"
+    }
+  }
+}
+```
 
 ---
 
