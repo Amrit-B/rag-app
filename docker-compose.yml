@@ -1,12 +1,16 @@
 services:
   fastapi:
-    image: docker.io/ambro333/rag-app:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: docker.io/ambro333/rag-api:latest
     container_name: rag-api
     ports:
       - "8000:8000"
     environment:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - RAG_SECRET_KEY=${RAG_SECRET_KEY}
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
     security_opt:
       - label=disable
     volumes:
@@ -15,16 +19,50 @@ services:
     command: uvicorn api:app --host 0.0.0.0 --port 8000 --workers 2
     restart: unless-stopped
 
-  streamlit:
-    image: docker.io/ambro333/rag-app:latest
+  frontend:
+    build:
+      context: ./frontend/web
+      dockerfile: Dockerfile
+    image: docker.io/ambro333/rag-frontend:latest
     container_name: rag-frontend
     ports:
-      - "8501:8501"
+      - "8501:3000"
+      - "3000:3000"
     environment:
-      - API_URL=http://fastapi:8000
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     security_opt:
       - label=disable
     depends_on:
       - fastapi
-    command: streamlit run frontend/app.py --server.address 0.0.0.0 --server.maxUploadSize 1000
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.54.0
+    container_name: rag-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    depends_on:
+      - fastapi
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: rag-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
     restart: unless-stopped

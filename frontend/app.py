@@ -277,8 +277,8 @@ def show_about():
         st.markdown("[Amrit Bhaganagare](https://www.linkedin.com/in/amrit-bhaganagare/)")
     
     with col3:
-        st.markdown("💻 **GitHub**")
-        st.markdown("[Amrit-B](https://github.com/Amrit-B)")
+        st.markdown("💻 **GitHub Repo**")
+        st.markdown("[Amrit-B](https://github.com/Amrit-B/rag-app)")
     
     st.markdown("---")
     st.markdown("### 🛠️ Built With")

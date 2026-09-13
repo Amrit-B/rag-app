@@ -1,176 +1,95 @@
-# RAG Application - Deployment Guide
+# Agentic RAG Platform - Deployment Guide
 
-## Local Development
+This guide covers running the application locally, containerized with Docker / Podman, and deploying to an Oracle Cloud VM using automated GitHub Actions CI/CD.
 
-1. Install dependencies:
-```bash
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
+---
 
-2. Set environment variables in `.env`:
-```
-GOOGLE_API_KEY=your_api_key_here
-RAG_SECRET_KEY=your_secret_key
-```
-
-3. Run locally:
-```bash
-# Terminal 1 - FastAPI
-python -m uvicorn api:app --reload
-
-# Terminal 2 - Streamlit
-streamlit run frontend/app.py
-```
-
-## Local Docker Testing
-
-Build and test with Docker:
-```bash
-docker-compose up --build
-```
-
-Access:
-- Frontend: http://localhost:8501
-- API: http://localhost:8000
-
-## Automated CI/CD Deployment
-
-This application uses **GitHub Actions for automatic deployment**.
-
-### How It Works
-
-1. **Push to main branch** triggers GitHub Actions workflow
-2. **Docker image** is built and pushed to Docker Hub (`ambro333/rag-app:latest`)
-3. **SSH connection** to Oracle Cloud VM executes deployment script
-4. **Containers** are pulled and restarted with latest image
-5. **Nginx** reverse proxy with SSL serves the application
+## 1. Local Development
 
 ### Prerequisites
+- Python 3.11+ (or uv)
+- Node.js 20+ & npm
 
-Before first deployment, ensure:
-
-1. **GitHub Secrets configured** (in repository settings):
-   - `DOCKER_USERNAME` - Docker Hub username
-   - `DOCKER_PASSWORD` - Docker Hub access token
-   - `VM_HOST` - Oracle Cloud VM public IP
-   - `VM_USER` - SSH username (e.g., `opc`)
-   - `VM_SSH_KEY` - Private SSH key
-   - `VM_SSH_PORT` - SSH port (default: 22)
-   - `VM_APP_PATH` - App directory on VM (e.g., `~/rag_app`)
-
-2. **VM Setup** (one-time):
-   ```bash
-   ssh -i <your-key> opc@<vm-ip>
-   
-   # Install podman and podman-compose
-   sudo dnf install -y podman podman-compose
-   
-   # Clone repository
-   git clone <repo-url> ~/rag_app
-   cd ~/rag_app
-   
-   # Create .env file with secrets
-   cat > .env << EOF
-   GOOGLE_API_KEY=your_api_key
-   RAG_SECRET_KEY=your_secret_key
-   EOF
+### Setup
+1. Clone the repository and configure `.env`:
+   ```env
+   GOOGLE_API_KEY=your_google_api_key
+   RAG_SECRET_KEY=your_jwt_secret
+   TAVILY_API_KEY=your_tavily_api_key  # Optional for live web search
    ```
 
-3. **Nginx Configuration** (one-time):
-   - SSL certificate setup with Let's Encrypt
-   - Reverse proxy to container ports (8000, 8501)
-
-### Deployment Workflow
-
-The workflow (`.github/workflows/deploy.yml`) automatically:
-1. Builds multi-stage Docker image
-2. Pushes to Docker Hub as `ambro333/rag-app:latest`
-3. SSH into VM and runs:
+2. Start the FastAPI Backend:
    ```bash
-   sudo podman pull docker.io/ambro333/rag-app:latest
-   sudo /usr/local/bin/podman-compose pull
-   sudo /usr/local/bin/podman-compose up -d --remove-orphans
+   uv sync
+   uv run uvicorn api:app --reload --port 8000
    ```
-4. Containers restart with new image
 
-### Manual Deployment (if needed)
+3. Start the Next.js Frontend:
+   ```bash
+   cd frontend/web
+   npm install
+   npm run dev
+   ```
+   Open [http://localhost:3000](http://localhost:3000).
 
-If automated deployment fails, deploy manually:
+---
+
+## 2. Local Docker Stack Testing
+
+Build and run the entire 4-container stack (Backend, Frontend, Prometheus, Grafana):
 
 ```bash
-ssh -i /path/to/key opc@<vm-ip>
-cd ~/rag_app
-
-# Pull latest image and restart
-sudo podman pull docker.io/ambro333/rag-app:latest
-sudo /usr/local/bin/podman-compose down
-sudo /usr/local/bin/podman-compose up -d
-
-# Check status
-sudo podman ps
+docker compose up -d --build
 ```
 
-### Viewing Logs
+### Services Overview:
+| Service | Internal Port | Host Port | Description |
+| :--- | :--- | :--- | :--- |
+| `fastapi` | 8000 | 8000 | LangGraph agentic RAG backend & SQLite |
+| `frontend` | 3000 | 3000, 8501 | Modern Next.js 15 Tailwind UI |
+| `prometheus` | 9090 | 9090 | Scrapes `/metrics` every 5 seconds |
+| `grafana` | 3000 | 3001 | Preconfigured metrics dashboard |
 
-**On VM:**
+- Web Application: http://localhost:3000 (or http://localhost:8501)
+- Backend Docs: http://localhost:8000/docs
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3001 (User: `admin`, Pass: `admin`)
+
+---
+
+## 3. Automated CI/CD Deployment (GitHub Actions)
+
+The workflow (`.github/workflows/deploy.yml`) handles continuous integration and deployment automatically on push to `main`:
+
+1. **Build & Push**:
+   - Builds `ambro333/rag-api:latest` (from root `Dockerfile`)
+   - Builds `ambro333/rag-frontend:latest` (from `frontend/web/Dockerfile`)
+   - Pushes both images to Docker Hub.
+2. **Deploy via SSH**:
+   - Connects to your Oracle Cloud VM.
+   - Pulls latest container images.
+   - Restarts containers using `podman-compose` / `docker-compose`.
+   - Reloads Nginx reverse proxy.
+
+### Required GitHub Secrets:
+- `DOCKER_USERNAME`: Docker Hub username
+- `DOCKER_PASSWORD`: Docker Hub token
+- `VM_HOST`: VM public IP address
+- `VM_USER`: SSH username (e.g., `opc`)
+- `VM_SSH_KEY`: SSH private key
+- `VM_SSH_PORT`: SSH port (default: 22)
+- `VM_APP_PATH`: Deployment path (e.g., `~/rag_app`)
+
+---
+
+## 4. Nginx SSL Reverse Proxy
+
+The configuration in `backup_nginx/conf.d/amritb.me.conf` maps traffic under HTTPS:
+- `/` -> Next.js frontend (`http://localhost:8501` or `http://localhost:3000`)
+- `/api/` -> FastAPI backend (`http://localhost:8000/`)
+- `/auth/`, `/rag/` -> FastAPI backend direct endpoints
+
+Restart Nginx on the VM:
 ```bash
-# FastAPI backend
-sudo podman logs rag-api -f
-
-# Streamlit frontend
-sudo podman logs rag-frontend -f
-
-# Nginx access logs
-sudo tail -f /var/log/nginx/access.log
-```
-
-### Troubleshooting
-
-**Old images still running:**
-```bash
-# Remove old local images
-sudo podman rmi docker.io/ambro333/rag-app:latest 2>&1 || true
-
-# Restart containers
-sudo /usr/local/bin/podman-compose down
-sudo /usr/local/bin/podman-compose up -d
-```
-
-**Container won't start:**
-```bash
-# Check logs for errors
-sudo podman logs <container-name>
-
-# Verify environment variables
-cat ~/rag_app/.env
-```
-
-## Application Access
-
-- **Frontend**: https://amritb.me (via Nginx SSL)
-- **API**: https://amritb.me/api (backend running in container)
-- **Local development**: http://localhost:8501 (Streamlit)
-
-## Environment Variables
-
-Required:
-- `GOOGLE_API_KEY` - Your Google API key for Gemini
-
-## Monitoring
-
-Check logs:
-```bash
-docker-compose logs -f
-```
-
-Restart services:
-```bash
-docker-compose restart
-```
-
-Stop services:
-```bash
-docker-compose down
+sudo nginx -t && sudo systemctl restart nginx
 ```
