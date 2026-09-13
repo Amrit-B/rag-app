@@ -144,7 +144,7 @@ def db_save_document(
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.id == int(owner_id)).first() if owner_id.isdigit() else None
-        doc = db.query(DocumentRecord).filter(DocumentRecord.doc_id == doc_id, DocumentRecord.owner_id == owner_id).first()
+        doc = db.query(DocumentRecord).filter(DocumentRecord.doc_id == doc_id).first()
         if not doc:
             doc = DocumentRecord(
                 doc_id=doc_id,

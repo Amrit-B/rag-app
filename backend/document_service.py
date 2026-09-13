@@ -95,7 +95,7 @@ def ingest_single_document(pdf_path: Path, owner_id: str) -> dict:
     4. Upserts into LanceDB table
     5. Saves metadata into SQLite
     """
-    doc_id = pdf_path.stem
+    doc_id = f"{owner_id}_{pdf_path.stem}"
     file_size = os.path.getsize(pdf_path) if pdf_path.exists() else 0
 
     try:

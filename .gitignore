@@ -43,6 +43,7 @@ nginx_access.log
 # Private debug/deployment scripts & artifacts
 check_users.py
 analyze_logs.py
+tests/test_local_e2e.py
 scp
 deploy.zip
 deploy.sh
