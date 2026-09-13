@@ -43,9 +43,3 @@ Thumbs.db
 .idea/*.bak
 
 analyze_logs.py
-
-# Node & Next.js
-node_modules/
-.next/
-frontend/web/node_modules/
-frontend/web/.next/

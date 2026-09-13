@@ -28,24 +28,12 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push Backend image
+      - name: Build and push image
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile
           push: true
-          tags: |
-            ambro333/rag-api:latest
-            ambro333/rag-app:latest
-          platforms: linux/amd64,linux/arm64
-
-      - name: Build and push Frontend Next.js image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend/web
-          file: ./frontend/web/Dockerfile
-          push: true
-          tags: ambro333/rag-frontend:latest
+          tags: ambro333/rag-app:latest
           platforms: linux/amd64,linux/arm64
 
   deploy:
@@ -65,26 +53,23 @@ jobs:
             
             sudo fuser -k 8000/tcp || true
             sudo fuser -k 8501/tcp || true
-            sudo fuser -k 3000/tcp || true
             
             if command -v podman >/dev/null 2>&1; then
               sudo podman system prune -a --force 2>&1 || true
-              sudo podman pull docker.io/ambro333/rag-api:latest
-              sudo podman pull docker.io/ambro333/rag-frontend:latest
-              sudo /usr/local/bin/podman-compose pull || true
+              sudo podman pull docker.io/ambro333/rag-app:latest
+              sudo /usr/local/bin/podman-compose pull
               sudo /usr/local/bin/podman-compose down || true
               sudo /usr/local/bin/podman-compose up -d --remove-orphans
             elif command -v docker >/dev/null 2>&1; then
               docker system prune -a --force 2>&1 || true
-              docker pull ambro333/rag-api:latest
-              docker pull ambro333/rag-frontend:latest
+              docker pull ambro333/rag-app:latest
               if docker compose version >/dev/null 2>&1; then
                 docker compose down || true
-                docker compose pull || true
+                docker compose pull
                 docker compose up -d --remove-orphans
               else
                 docker-compose down || true
-                docker-compose pull || true
+                docker-compose pull
                 docker-compose up -d --remove-orphans
               fi
             fi
