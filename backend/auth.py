@@ -1,35 +1,15 @@
-import os
-from sqlalchemy import create_engine, Column, Integer, String
-from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy.exc import IntegrityError
-from pathlib import Path
+from datetime import datetime, timedelta
+# pyrefly: ignore [missing-module-attribute]
 from passlib.hash import pbkdf2_sha256
 import jwt
-from datetime import datetime, timedelta
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from backend.constants import DATA_PATH, SECRET_KEY, AUTH_DB_PATH
+from sqlalchemy.exc import IntegrityError
 
-
-# SQLAlchemy Setup
-SQLALCHEMY_DATABASE_URL = f"sqlite:///{AUTH_DB_PATH}"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
-
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
-
-class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True)
-    password_hash = Column(String)
+from backend.constants import SECRET_KEY
+from backend.database import SessionLocal, User, init_db
 
 security = HTTPBearer()
-
-
-def init_db():
-    AUTH_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    Base.metadata.create_all(bind=engine)
 
 
 def create_user(username: str, password: str) -> dict:
