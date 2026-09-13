@@ -94,7 +94,9 @@ def init_db():
             columns = [row[1] for row in cursor.fetchall()]
             if "is_admin" not in columns:
                 conn.execute(text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT 0"))
-                conn.commit()
+            if "created_at" not in columns:
+                conn.execute(text("ALTER TABLE users ADD COLUMN created_at DATETIME"))
+            conn.commit()
         except Exception as e:
             print(f"Migration notice: {e}")
 
