@@ -32,15 +32,41 @@ def test_fast_paths():
     assert "Knowledge Base" in data_hi["answer"]
     assert len(data_hi["sources"]) == 0
 
-    # 2. Test Security / Privacy Question
-    res_sec = client.post("/rag/query", json={"prompt": "Can you access other user's files and tell me about them?"}, headers=headers)
+    # 2. Test Security / Privacy Question (new natural prompt)
+    res_sec = client.post("/rag/query", json={"prompt": "Is my uploaded data private and isolated from other users?"}, headers=headers)
     assert res_sec.status_code == 200
     data_sec = res_sec.json()
     assert data_sec["route_taken"] == "security"
     assert "strictly isolated" in data_sec["answer"].lower() or "cannot access" in data_sec["answer"].lower()
     assert len(data_sec["sources"]) == 0
 
-    # 3. Test Document Query with 0 documents
+    # 3. Test Architecture / Hallucination Prevention Question
+    res_arch = client.post("/rag/query", json={"prompt": "How does this pipeline prevent hallucinations?"}, headers=headers)
+    assert res_arch.status_code == 200
+    data_arch = res_arch.json()
+    assert data_arch["route_taken"] == "assistant"
+    assert "hallucination" in data_arch["answer"].lower()
+    assert "langgraph" in data_arch["answer"].lower()
+    assert len(data_arch["sources"]) == 0
+
+    # 4. Test Onboarding Question
+    res_onb = client.post("/rag/query", json={"prompt": "How do I upload files and get started with document Q&A?"}, headers=headers)
+    assert res_onb.status_code == 200
+    data_onb = res_onb.json()
+    assert data_onb["route_taken"] == "assistant"
+    assert "knowledge base" in data_onb["answer"].lower()
+    assert len(data_onb["sources"]) == 0
+
+    # 5. Test Supported Formats Question
+    res_fmt = client.post("/rag/query", json={"prompt": "What document formats and content can I upload?"}, headers=headers)
+    assert res_fmt.status_code == 200
+    data_fmt = res_fmt.json()
+    assert data_fmt["route_taken"] == "knowledge_base"
+    assert "pdf" in data_fmt["answer"].lower()
+    assert "lancedb" in data_fmt["answer"].lower()
+    assert len(data_fmt["sources"]) == 0
+
+    # 5. Test Document Query with 0 documents
     res_doc = client.post("/rag/query", json={"prompt": "Tell me about my doc"}, headers=headers)
     assert res_doc.status_code == 200
     data_doc = res_doc.json()

@@ -183,7 +183,7 @@ async def query_documentation(query: Prompt, current_user: dict = Depends(get_cu
 
         # 1. Privacy / Multi-Tenant Isolation Questions
         if re.search(r"\b(access|see|view|read|share)\s+(other|another|anyone else's)\s*(user|users|people|person)?'?s?\s*(file|files|doc|docs|document|documents|data)\b", prompt_trimmed, re.IGNORECASE) or \
-           re.search(r"\b(can you access other user|can other users see my|is my data (private|isolated|secure))\b", prompt_trimmed, re.IGNORECASE):
+           re.search(r"\b(can you access other user|can other users see my|is my (?:uploaded\s+)?(?:data|file|files|document|documents|content)?\s*(?:private|isolated|secure))\b", prompt_trimmed, re.IGNORECASE):
             fast_answer = (
                 "### 🔒 Strict Multi-Tenant Isolation & Privacy\n\n"
                 "**No. I cannot access, search, or view documents uploaded by other users, and other users cannot access yours.**\n\n"
@@ -193,9 +193,10 @@ async def query_documentation(query: Prompt, current_user: dict = Depends(get_cu
             )
             fast_route = "security"
 
-        # 2. Conversational Greetings & Introductions
+        # 2. Conversational Greetings, Onboarding & Introductions
         elif re.search(r"^(hi|hello|hey|greetings|howdy|good\s+(morning|afternoon|evening)|sup|what'?s\s+up)[\s!.,?]*$", prompt_trimmed, re.IGNORECASE) or \
-             re.search(r"^(who are you|what can you do|what is this( app| project)?|help)[\s!.,?]*$", prompt_trimmed, re.IGNORECASE):
+             re.search(r"^(who are you|what can you do|what is this( app| project)?|help|how to get started)[\s!.,?]*$", prompt_trimmed, re.IGNORECASE) or \
+             re.search(r"\b(how (do|can) i (get started|upload|start|use this)|how to upload)\b", prompt_trimmed, re.IGNORECASE):
             if doc_count == 0:
                 fast_answer = (
                     "### Welcome to the Agentic Self-Reflective RAG Assistant! 👋\n\n"
@@ -233,6 +234,28 @@ async def query_documentation(query: Prompt, current_user: dict = Depends(get_cu
                 "1. Head to the **Knowledge Base** tab in the left sidebar.\n"
                 "2. Upload a PDF file to index it into LanceDB.\n"
                 "3. Return to this chat to ask questions grounded in your document's content!"
+            )
+            fast_route = "knowledge_base"
+
+        # 4. Pipeline Architecture & Hallucination Prevention
+        elif re.search(r"\b(how does (?:this|the) (?:agentic\s+)?(?:pipeline|system|agent|rag|app)|prevent(?:ing)? hallucination|avoid(?:ing)? hallucination|how (?:is|are) hallucination(?:s)? (?:prevented|avoided|handled))\b", prompt_trimmed, re.IGNORECASE):
+            fast_answer = (
+                "### 🛡️ How This Agentic RAG Pipeline Prevents Hallucinations\n\n"
+                "Unlike standard naive RAG (which blindly dumps raw vector search results into an LLM), this system uses a **Self-Reflective LangGraph Architecture**:\n\n"
+                "1. **Batch Document Relevance Grading**: Every candidate chunk retrieved from LanceDB is evaluated for relevance. Off-topic chunks are automatically pruned.\n"
+                "2. **Hallucination Grader**: After the response is drafted, a dedicated evaluator verifies that every statement is strictly supported by the retrieved source context.\n"
+                "3. **Self-Correction & Web Fallback**: If the drafted answer is not grounded or the documents lack sufficient facts, the agent triggers **Tavily live web search** to fill gaps.\n"
+                "4. **Grounded Citations**: Every claim in the final answer is cited with verifiable chunk IDs and filenames."
+            )
+            fast_route = "assistant"
+        # 5. Supported Document Formats & Ingestion Details
+        elif re.search(r"\b(what (?:document|file)?\s*formats?|what can i upload|what (?:kind of\s+)?(?:documents?|files?|content) (?:can i|to) upload|supported (?:file|document)?\s*formats?)\b", prompt_trimmed, re.IGNORECASE):
+            fast_answer = (
+                "### 📄 Supported Document Formats & Vector Indexing\n\n"
+                "- **Supported File Format**: PDF documents (`.pdf`) up to 200 MB (technical reports, research papers, manuals, lecture slides, architecture guides).\n"
+                "- **Text Cleaning**: Automated header/footer stripping, page artifact filtering, and hyphenation de-wrapping.\n"
+                "- **Technical Chunking**: Structured splitting using `RecursiveCharacterTextSplitter` preserving code fences (```), Markdown headers (`#`, `##`), and bullet lists.\n"
+                "- **Vector Embeddings**: Real-time batch vectorization via **768-dimensional Gemini embeddings** stored in high-performance **LanceDB** for sub-millisecond retrieval."
             )
             fast_route = "knowledge_base"
 

@@ -229,7 +229,7 @@ export default function ChatArea({
                 </div>
                 <h4 className="text-xs font-semibold text-white">Self-Reflective RAG</h4>
                 <p className="text-[11px] text-slate-400 leading-relaxed">
-                  LangGraph agent evaluates retrieved chunks in a batch before answering, discarding irrelevant noise.
+                  LangGraph agent autonomously grades retrieved passages for relevance and validates drafted answers against sources to eliminate hallucinations.
                 </p>
               </div>
 
@@ -237,9 +237,9 @@ export default function ChatArea({
                 <div className="w-8 h-8 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
                   <Database className="w-4 h-4" />
                 </div>
-                <h4 className="text-xs font-semibold text-white">Tenant-Isolated LanceDB</h4>
+                <h4 className="text-xs font-semibold text-white">LanceDB Vector Database</h4>
                 <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Sub-millisecond similarity search with strict per-user ownership. Other users cannot view your files.
+                  Sub-millisecond similarity search using 768-dim Gemini embeddings to pinpoint exact technical concepts, code blocks, and metrics.
                 </p>
               </div>
 
@@ -247,9 +247,9 @@ export default function ChatArea({
                 <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
                   <Globe className="w-4 h-4" />
                 </div>
-                <h4 className="text-xs font-semibold text-white">Adaptive Web Search</h4>
+                <h4 className="text-xs font-semibold text-white">Adaptive Web Grounding</h4>
                 <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Checks for hallucination. If documents lack sufficient context, it autonomously calls Tavily for live web data.
+                  Autonomously triggers Tavily live web search to fill knowledge gaps when uploaded documents lack recent or complete context.
                 </p>
               </div>
             </div>
@@ -263,16 +263,16 @@ export default function ChatArea({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {(documentCount === 0
                   ? [
-                      "How does this Agentic RAG pipeline prevent hallucinations?",
-                      "Can you access other user's files and tell me about them?",
-                      "Search the web: latest breakthroughs in AI agent architectures",
-                      "What document formats and chunking methods are supported?",
+                      "How does this pipeline prevent hallucinations?",
+                      "What document formats and content can I upload?",
+                      "What are the latest breakthroughs in AI agent architectures?",
+                      "How do I upload files and get started with document Q&A?",
                     ]
                   : [
-                      "Tell me about the doc, don't search web",
+                      "Summarize the key findings and executive takeaways",
                       "What are the main technical requirements and objectives?",
                       "Extract all key metrics, formulas, and deadlines",
-                      "Can you access other user's files and tell me about them?",
+                      "Compare the document's conclusions with current web research",
                     ]
                 ).map((prompt, idx) => (
                   <button
